@@ -3,7 +3,9 @@
   "build": {
     "builder": "NIXPACKS",
     "buildPack": "pip",
-    "src": "backend"
+    "src": "backend",
+    "installCommand": "cd backend && pip install -r requirements.txt",
+    "startCommand": "cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT"
   },
   "deploy": {
     "numReplicas": 1,
