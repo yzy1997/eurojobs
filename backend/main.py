@@ -179,6 +179,39 @@ class JobScraper:
 
         return jobs
 
+    async def scrape_adzuna(self, country: str, keyword: str, limit: int = 10):
+        """使用 Adzuna API (免费 tier)"""
+        # Adzuna 免费 API 需要注册获取 App ID 和 Key
+        # 这里使用演示 key，实际使用需要替换
+        app_id = "demo"
+        app_key = "demo"
+        country_code = {"德国": "de", "法国": "fr", "英国": "gb"}.get(country, "de")
+
+        url = f"https://api.adzuna.com/v1/api/jobs/{country_code}/search?app_id={app_id}&app_key={app_key}&what={keyword}&results_per_page={limit}"
+
+        jobs = []
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.get(url)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    for item in data.get("results", []):
+                        jobs.append({
+                            "title": item.get("title", ""),
+                            "company": item.get("company", {}).get("display_name", "未知公司"),
+                            "location": item.get("location", {}).get("display_name", ""),
+                            "country": country,
+                            "category": self.categorize(item.get("title", ""), ""),
+                            "salary_range": f"{item.get('salary_min', '')} - {item.get('salary_max', '')}" if item.get("salary_min") else "",
+                            "description": item.get("description", "")[:500] if item.get("description") else "",
+                            "url": item.get("redirect_url", ""),
+                            "source": "Adzuna",
+                        })
+        except Exception as e:
+            print(f"Adzuna API error: {e}")
+
+        return jobs
+
     def categorize(self, title: str, description: str) -> str:
         text = (title + " " + description).lower()
         if any(w in text for w in ["software", "developer", "engineer", "python", "java", "frontend", "backend", "data", "ai"]):
@@ -225,6 +258,16 @@ async def run_scraper():
                 print(f"  ✅ Remote OK - {keyword}: {len(jobs)} 个职位")
             except Exception as e:
                 print(f"  ❌ Remote OK - {keyword} 失败")
+
+    # 3. 尝试使用 Adzuna API (免费 tier)
+    if not all_jobs:
+        print("📡 尝试使用 Adzuna API...")
+        try:
+            jobs = await scraper.scrape_adzuna("germany", "python")
+            all_jobs.extend(jobs)
+            print(f"  ✅ Adzuna: {len(jobs)} 个职位")
+        except Exception as e:
+            print(f"  ❌ Adzuna 失败: {e}")
 
     # 保存到数据库
     if all_jobs:
