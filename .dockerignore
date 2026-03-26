@@ -1,0 +1,11 @@
+.git
+.gitignore
+frontend/
+README.md
+DEPLOY_RAILWAY.md
+deploy.sh
+start.sh
+Procfile
+node_modules/
+__pycache__/
+*.pyc
