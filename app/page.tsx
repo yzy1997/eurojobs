@@ -41,7 +41,7 @@ export default function Home() {
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://eurojobs-production.up.railway.app';
       // 获取所有数据，不限制数量
-      const res = await fetch(`${apiUrl}/api/jobs?limit=2000`);
+      const res = await fetch(`${apiUrl}/api/jobs`);
       const data = await res.json();
       setJobs(Array.isArray(data) ? data : []);
     } catch (error) {

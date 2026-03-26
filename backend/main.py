@@ -425,7 +425,7 @@ async def trigger_scrape():
     return {"message": "爬取完成"}
 
 @app.get("/api/jobs")
-async def get_jobs(country: Optional[str] = None, category: Optional[str] = None, search: Optional[str] = None, limit: int = 50, offset: int = 0):
+async def get_jobs(country: Optional[str] = None, category: Optional[str] = None, search: Optional[str] = None, limit: int = 10000, offset: int = 0):
     try:
         pool = await get_pool()
         async with pool.acquire() as conn:
