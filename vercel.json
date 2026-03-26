@@ -1,12 +1,6 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "frontend/package.json",
-      "use": "@vercel/next",
-      "config": {
-        "outputDir": ".next"
-      }
-    }
-  ]
+  "build": {
+    "src": "frontend",
+    "use": "@vercel/next"
+  }
 }
