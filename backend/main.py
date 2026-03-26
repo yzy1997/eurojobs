@@ -32,8 +32,10 @@ async def get_pool():
 # ============== 数据库初始化 ==============
 async def init_db():
     """初始化数据库表"""
+    print("🔄 正在初始化数据库...")
     pool = await get_pool()
     async with pool.acquire() as conn:
+        # 创建 jobs 表
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS jobs (
                 id SERIAL PRIMARY KEY,
@@ -44,12 +46,13 @@ async def init_db():
                 category VARCHAR(50),
                 salary_range VARCHAR(100),
                 description TEXT,
-                url TEXT NOT NULL UNIQUE,
+                url TEXT NOT NULL,
                 source VARCHAR(50) NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 likes INTEGER DEFAULT 0
             )
         """)
+        # 创建 comments 表
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS comments (
                 id SERIAL PRIMARY KEY,
@@ -59,7 +62,12 @@ async def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        print("✅ 数据库表初始化完成")
+        # 添加 url 唯一约束
+        try:
+            await conn.execute("ALTER TABLE jobs ADD CONSTRAINT jobs_url_key UNIQUE (url)")
+        except:
+            pass
+    print("✅ 数据库表初始化完成")
 
 # ============== 爬虫模块 ==============
 class JobScraper:
@@ -177,11 +185,19 @@ async def run_scraper():
 # ============== 启动事件 ==============
 @app.on_event("startup")
 async def startup():
+    print("🔄 启动中...")
     try:
-        await init_db()  # 先建表
-        await run_scraper()  # 然后爬取数据
+        # 测试数据库连接
+        pool = await get_pool()
+        print("✅ 数据库连接成功")
+
+        # 初始化表
+        await init_db()
+
+        # 运行爬虫
+        await run_scraper()
     except Exception as e:
-        print(f"启动错误: {e}")
+        print(f"❌ 启动错误: {e}")
 
 # ============== API 端点 ==============
 
