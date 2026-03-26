@@ -179,17 +179,84 @@ class JobScraper:
             return "其他"
 
 # ============== 运行爬虫 ==============
+import asyncio
+import aiohttp
+import asyncio
+
+# Adzuna API 配置
+ADZUNA_APP_ID = "2ef8c956"
+ADZUNA_APP_KEY = "00569c16b823ed37c3f4253495ae0fbf"
+
+# 国家代码映射
+COUNTRY_CODES = {
+    "德国": "de", "法国": "fr", "英国": "gb", "荷兰": "nl",
+    "西班牙": "es", "意大利": "it", "瑞典": "se", "芬兰": "fi",
+    "波兰": "pl", "丹麦": "dk", "挪威": "no", "瑞士": "ch",
+    "比利时": "be", "爱尔兰": "ie", "奥地利": "at", "捷克": "cz",
+    "匈牙利": "hu", "葡萄牙": "pt", "希腊": "gr"
+}
+
+async def scrape_single(session, country, keyword, limit=5):
+    """单个查询爬取"""
+    country_code = COUNTRY_CODES.get(country, "de")
+    url = f"https://api.adzuna.com/v1/api/jobs/{country_code}/search?app_id={ADZUNA_APP_ID}&app_key={ADZUNA_APP_KEY}&what={keyword}&results_per_page={limit}"
+
+    try:
+        async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                jobs = []
+                for item in data.get("results", []):
+                    jobs.append({
+                        "title": item.get("title", ""),
+                        "company": item.get("company", {}).get("display_name", "未知公司"),
+                        "location": item.get("location", {}).get("display_name", ""),
+                        "country": country,
+                        "category": categorize_job(item.get("title", "")),
+                        "salary_range": format_salary(item.get("salary_min"), item.get("salary_max")),
+                        "description": item.get("description", "")[:500] if item.get("description") else "",
+                        "url": item.get("redirect_url", ""),
+                        "source": "Adzuna",
+                    })
+                return jobs
+    except Exception as e:
+        pass
+    return []
+
+def categorize_job(title):
+    """分类函数"""
+    text = title.lower()
+    if any(w in text for w in ["python", "java", "javascript", "software", "developer", "engineer", "frontend", "backend", "full stack", "web", "cloud", "devops", "machine learning", "data"]):
+        return "技术"
+    elif any(w in text for w in ["product", "project", "designer", "UX"]):
+        return "产品设计"
+    elif any(w in text for w in ["finance", "accountant", "banking", "financial"]):
+        return "金融"
+    elif any(w in text for w in ["marketing", "digital", "sales", "brand"]):
+        return "市场"
+    elif any(w in text for w in ["HR", "human resources", "recruiter"]):
+        return "人力资源"
+    elif any(w in text for w in ["nurse", "doctor", "medical", "healthcare"]):
+        return "医疗"
+    elif any(w in text for w in ["teacher", "education", "trainer"]):
+        return "教育"
+    return "其他"
+
+def format_salary(min_sal, max_sal):
+    if min_sal and max_sal:
+        return f"€{int(min_sal)} - €{int(max_sal)}"
+    return ""
+
 async def run_scraper():
+    """分批爬虫 - 避免超时"""
     print("🚀 开始自动爬取职位信息...")
-    scraper = JobScraper()
 
     all_jobs = []
 
-    # 1. Adzuna API (需要真实API key)
-    print("📡 尝试 Adzuna API...")
-    # 主要欧洲国家 (减少以避免超时)
+    # 欧洲国家
     countries = [
-        "德国", "法国", "英国", "荷兰", "西班牙", "意大利", "瑞典", "芬兰", "波兰", "丹麦", "挪威", "瑞士", "比利时", "爱尔兰", "奥地利"
+        "德国", "法国", "英国", "荷兰", "西班牙", "意大利", "瑞典", "芬兰", "波兰",
+        "丹麦", "挪威", "瑞士", "比利时", "爱尔兰", "奥地利", "捷克", "匈牙利", "葡萄牙", "希腊"
     ]
 
     # 热门关键词
@@ -205,23 +272,43 @@ async def run_scraper():
         "teacher", "education", "trainer"
     ]
 
-    print(f"🔍 开始爬取 {len(countries)} 个国家，{len(keywords)} 个关键词...")
+    print(f"🔍 开始爬取 {len(countries)} 个国家 x {len(keywords)} 个关键词...")
 
-    for country in countries:
-        for keyword in keywords:
-            try:
-                jobs = await scraper.scrape_adzuna(country, keyword, limit=5)  # 减少到5个
-                if jobs:
-                    all_jobs.extend(jobs)
-            except Exception as e:
-                pass
+    # 创建 session
+    async with aiohttp.ClientSession() as session:
+        total = len(countries) * len(keywords)
+        count = 0
 
-    print(f"📊 获取 {len(all_jobs)} 个职位")
+        for country in countries:
+            for keyword in keywords:
+                count += 1
+                try:
+                    jobs = await scrape_single(session, country, keyword, limit=5)
+                    if jobs:
+                        all_jobs.extend(jobs)
+                    # 每10次请求等待1秒，避免被限制
+                    if count % 10 == 0:
+                        await asyncio.sleep(1)
+                        print(f"  📊 进度: {count}/{total} - 已获取 {len(all_jobs)} 个职位")
+                except Exception as e:
+                    pass
+
+    print(f"📊 共获取 {len(all_jobs)} 个职位")
+
+    # 去重
+    seen = {}
+    unique_jobs = []
+    for job in all_jobs:
+        if job["url"] not in seen:
+            seen[job["url"]] = True
+            unique_jobs.append(job)
+
+    print(f"📊 去重后: {len(unique_jobs)} 个职位")
 
     # 2. 如果没数据，使用扩展的示例数据
-    if len(all_jobs) < 5:
+    if len(unique_jobs) < 5:
         print("⚠️ 使用扩展示例数据...")
-        all_jobs = get_extended_sample_data()
+        unique_jobs = get_extended_sample_data()
 
     # 保存到数据库
     pool = await get_pool()
@@ -229,7 +316,7 @@ async def run_scraper():
         # 删除旧数据
         await conn.execute("DELETE FROM jobs")
         # 插入新数据
-        for job in all_jobs:
+        for job in unique_jobs:
             try:
                 await conn.execute(
                     """INSERT INTO jobs (title, company, location, country, category, salary_range, description, url, source, likes)
@@ -241,7 +328,7 @@ async def run_scraper():
             except Exception as e:
                 pass
 
-    print(f"✅ 共保存 {len(all_jobs)} 个职位")
+    print(f"✅ 共保存 {len(unique_jobs)} 个职位")
 
 def get_extended_sample_data():
     """扩展的示例数据"""
