@@ -37,9 +37,11 @@ export default function Home() {
     try {
       const res = await fetch("/api/jobs");
       const data = await res.json();
-      setJobs(data);
+      // 确保 data 是数组
+      setJobs(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Failed to fetch jobs:", error);
+      setJobs([]);
     } finally {
       setLoading(false);
     }
