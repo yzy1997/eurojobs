@@ -184,6 +184,31 @@ async def run_scraper():
                 except Exception as e:
                     pass
         print(f"🎉 共保存 {len(all_jobs)} 个职位到数据库")
+    else:
+        # 如果爬虫没有获取到数据，插入示例数据
+        print("⚠️ 爬虫未获取到数据，插入示例数据...")
+        sample_jobs = [
+            {"title": "Senior Python Developer", "company": "TechCorp Berlin", "location": "Berlin", "country": "德国", "category": "技术", "salary_range": "€70,000 - €100,000", "description": "Python后端开发", "url": "https://example.com/job1", "source": "Indeed"},
+            {"title": "Frontend Engineer", "company": "WebSolutions Paris", "location": "Paris", "country": "法国", "category": "技术", "salary_range": "€55,000 - €75,000", "description": "React开发", "url": "https://example.com/job2", "source": "LinkedIn"},
+            {"title": "Data Scientist", "company": "DataCo London", "location": "London", "country": "英国", "category": "技术", "salary_range": "£50,000 - £70,000", "description": "数据分析", "url": "https://example.com/job3", "source": "Indeed"},
+            {"title": "Marketing Manager", "company": "BrandCo Amsterdam", "location": "Amsterdam", "country": "荷兰", "category": "市场", "salary_range": "€50,000 - €70,000", "description": "市场营销", "url": "https://example.com/job4", "source": "LinkedIn"},
+            {"title": "UX Designer", "company": "DesignHub Stockholm", "location": "Stockholm", "country": "瑞典", "category": "设计", "salary_range": "SEK 50,000 - 70,000", "description": "用户体验设计", "url": "https://example.com/job5", "source": "Indeed"},
+        ]
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            for job in sample_jobs:
+                try:
+                    await conn.execute(
+                        """INSERT INTO jobs (title, company, location, country, category, salary_range, description, url, source, likes)
+                           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                           ON CONFLICT (url) DO NOTHING""",
+                        job["title"], job["company"], job["location"], job["country"],
+                        job["category"], job["salary_range"], job["description"],
+                        job["url"], job["source"], 0
+                    )
+                except Exception as e:
+                    pass
+        print("✅ 示例数据插入完成")
 
 # ============== 启动事件 ==============
 @app.on_event("startup")
