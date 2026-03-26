@@ -1,6 +1,0 @@
-{
-  "build": {
-    "src": "frontend",
-    "use": "@vercel/next"
-  }
-}
