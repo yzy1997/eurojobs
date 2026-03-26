@@ -35,7 +35,8 @@ export default function Home() {
 
   const fetchJobs = async () => {
     try {
-      const res = await fetch("/api/jobs");
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://eurojobs-production.up.railway.app';
+      const res = await fetch(`${apiUrl}/api/jobs`);
       const data = await res.json();
       // 确保 data 是数组
       setJobs(Array.isArray(data) ? data : []);
@@ -57,7 +58,8 @@ export default function Home() {
 
   const handleLike = async (jobId: number) => {
     try {
-      await fetch(`/api/jobs/${jobId}/like`, { method: "POST" });
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://eurojobs-production.up.railway.app';
+      await fetch(`${apiUrl}/api/jobs/${jobId}/like`, { method: "POST" });
       setJobs(jobs.map(j => j.id === jobId ? { ...j, likes: j.likes + 1 } : j));
       setLikedJobs(new Set(likedJobs.add(jobId)));
     } catch (error) {

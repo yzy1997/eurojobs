@@ -27,6 +27,8 @@ interface Comment {
   created_at: string;
 }
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://eurojobs-production.up.railway.app';
+
 export default function JobDetail() {
   const params = useParams();
   const [job, setJob] = useState<Job | null>(null);
@@ -43,7 +45,7 @@ export default function JobDetail() {
 
   const fetchJobDetails = async () => {
     try {
-      const res = await fetch(`/api/jobs/${params.id}`);
+      const res = await fetch(`${API_URL}/api/jobs/${params.id}`);
       if (res.ok) {
         const data = await res.json();
         setJob(data);
@@ -57,7 +59,7 @@ export default function JobDetail() {
 
   const fetchComments = async () => {
     try {
-      const res = await fetch(`/api/comments?job_id=${params.id}`);
+      const res = await fetch(`${API_URL}/api/comments?job_id=${params.id}`);
       if (res.ok) {
         const data = await res.json();
         setComments(data);
@@ -70,7 +72,7 @@ export default function JobDetail() {
   const handleLike = async () => {
     if (!job) return;
     try {
-      await fetch(`/api/jobs/${job.id}/like`, { method: "POST" });
+      await fetch(`${API_URL}/api/jobs/${job.id}/like`, { method: "POST" });
       setJob({ ...job, likes: job.likes + 1 });
       setLiked(true);
     } catch (error) {
@@ -83,7 +85,7 @@ export default function JobDetail() {
     if (!newComment.trim() || !authorName.trim()) return;
 
     try {
-      const res = await fetch("/api/comments", {
+      const res = await fetch(`${API_URL}/api/comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
