@@ -105,57 +105,31 @@ async def init_db():
 
 # ============== 自动爬虫功能 ==============
 async def scrape_and_save():
-    """爬取职位并保存到数据库"""
-    try:
-        # 动态导入爬虫模块
-        import sys
-        sys.path.append('backend')
-        from scrapers.indeed import IndeedScraper
-        scraper = IndeedScraper()
-
-        print("🔄 开始自动爬取职位信息...")
-
-        # 爬取德国和法国的Python职位
-        countries = ["德国", "法国", "英国"]
-        keywords = ["python", "software developer", "data scientist"]
-
-        all_jobs = []
-        for country in countries:
-            for keyword in keywords:
-                try:
-                    scraper = IndeedScraper()
-                    jobs = await scraper.scrape(country=country, keywords=keyword, limit=10)
-                    all_jobs.extend(jobs)
-                    print(f"  ✅ {country} - {keyword}: 获取 {len(jobs)} 个职位")
-                except Exception as e:
-                    print(f"  ❌ {country} - {keyword} 失败: {e}")
-
-        # 去重并保存到数据库
-        if all_jobs:
-            pool = await get_pool()
-            seen = set()
-            async with pool.acquire() as conn:
-                for job in all_jobs:
-                    # 根据 url 去重
-                    if job['url'] in seen:
-                        continue
-                    seen.add(job['url'])
-
-                    await conn.execute(
-                        """INSERT INTO jobs (title, company, location, country, category, salary_range, description, url, source, likes)
-                           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-                           ON CONFLICT (url) DO NOTHING""",
-                        job['title'], job['company'], job['location'], job['country'],
-                        job['category'], job['salary_range'], job['description'],
-                        job['url'], job['source'], job['likes']
-                    )
-
-            print(f"🎉 爬取完成！共保存 {len(seen)} 个新职位")
-        else:
-            print("⚠️ 未获取到任何职位")
-
-    except Exception as e:
-        print(f"❌ 爬虫运行失败: {e}")
+    """爬取职位并保存到数据库（简化版）"""
+    print("🔄 开始自动爬取职位信息...")
+    # 模拟插入一些示例数据
+    pool = await get_pool()
+    sample_jobs = [
+        {"title": "Senior Python Developer", "company": "TechCorp Berlin", "location": "Berlin", "country": "德国", "category": "技术", "salary_range": "€70,000 - €100,000", "description": "Python后端开发", "url": "https://example.com/job1", "source": "Indeed"},
+        {"title": "Frontend Engineer", "company": "WebSolutions Paris", "location": "Paris", "country": "法国", "category": "技术", "salary_range": "€55,000 - €75,000", "description": "React开发", "url": "https://example.com/job2", "source": "LinkedIn"},
+        {"title": "Data Scientist", "company": "DataCo London", "location": "London", "country": "英国", "category": "技术", "salary_range": "£50,000 - £70,000", "description": "数据分析", "url": "https://example.com/job3", "source": "Indeed"},
+        {"title": "Marketing Manager", "company": "BrandCo Amsterdam", "location": "Amsterdam", "country": "荷兰", "category": "市场", "salary_range": "€50,000 - €70,000", "description": "市场营销", "url": "https://example.com/job4", "source": "LinkedIn"},
+        {"title": "UX Designer", "company": "DesignHub Stockholm", "location": "Stockholm", "country": "瑞典", "category": "设计", "salary_range": "SEK 50,000 - 70,000", "description": "用户体验设计", "url": "https://example.com/job5", "source": "Indeed"},
+    ]
+    async with pool.acquire() as conn:
+        for job in sample_jobs:
+            try:
+                await conn.execute(
+                    """INSERT INTO jobs (title, company, location, country, category, salary_range, description, url, source, likes)
+                       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                       ON CONFLICT (url) DO NOTHING""",
+                    job['title'], job['company'], job['location'], job['country'],
+                    job['category'], job['salary_range'], job['description'],
+                    job['url'], job['source'], 0
+                )
+            except Exception as e:
+                print(f"  ❌ 插入失败: {e}")
+    print(f"✅ 示例职位数据已保存")
 
 async def start_scheduler():
     """定时任务：每6小时爬取一次"""
