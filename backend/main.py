@@ -3,6 +3,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 import os
+import asyncio
+import httpx
+from bs4 import BeautifulSoup
+from datetime import datetime
 
 app = FastAPI(title="EuroJobs API")
 
@@ -14,57 +18,137 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 示例职位数据 (不需要数据库)
-SAMPLE_JOBS = [
-    {"id": 1, "title": "Senior Python Developer", "company": "TechCorp Berlin", "location": "Berlin", "country": "德国", "category": "技术", "salary_range": "€70,000 - €100,000", "description": "Python后端开发，熟练掌握Django/FastAPI，有欧洲工作经历优先。", "url": "https://example.com/job1", "source": "Indeed", "likes": 42, "created_at": "2024-01-15"},
-    {"id": 2, "title": "Frontend Engineer", "company": "WebSolutions Paris", "location": "Paris", "country": "法国", "category": "技术", "salary_range": "€55,000 - €75,000", "description": "React/Vue开发，热爱前端技术，有大型项目经验。", "url": "https://example.com/job2", "source": "LinkedIn", "likes": 28, "created_at": "2024-01-14"},
-    {"id": 3, "title": "Data Scientist", "company": "DataCo London", "location": "London", "country": "英国", "category": "技术", "salary_range": "£50,000 - £70,000", "description": "数据分析，机器学习，Python/R，必须有相关经验。", "url": "https://example.com/job3", "source": "Indeed", "likes": 35, "created_at": "2024-01-13"},
-    {"id": 4, "title": "Marketing Manager", "company": "BrandCo Amsterdam", "location": "Amsterdam", "country": "荷兰", "category": "市场", "salary_range": "€50,000 - €70,000", "description": "数字营销经验，熟悉欧洲市场，英文流利。", "url": "https://example.com/job4", "source": "LinkedIn", "likes": 19, "created_at": "2024-01-12"},
-    {"id": 5, "title": "UX Designer", "company": "DesignHub Stockholm", "location": "Stockholm", "country": "瑞典", "category": "设计", "salary_range": "SEK 50,000 - 70,000", "description": "用户体验设计，熟练使用Figma，有作品集。", "url": "https://example.com/job5", "source": "Indeed", "likes": 31, "created_at": "2024-01-11"},
-    {"id": 6, "title": "Product Manager", "company": "Innovate GmbH", "location": "Munich", "country": "德国", "category": "运营", "salary_range": "€65,000 - €90,000", "description": "产品管理，有技术背景优先，协调能力强。", "url": "https://example.com/job6", "source": "LinkedIn", "likes": 24, "created_at": "2024-01-10"},
-    {"id": 7, "title": "DevOps Engineer", "company": "CloudTech Paris", "location": "Lyon", "country": "法国", "category": "技术", "salary_range": "€60,000 - €85,000", "description": "Kubernetes, AWS, CI/CD经验丰富。", "url": "https://example.com/job7", "source": "Indeed", "likes": 45, "created_at": "2024-01-09"},
-    {"id": 8, "title": "Sales Representative", "company": "TradeCo London", "location": "Manchester", "country": "英国", "category": "销售", "salary_range": "£35,000 - £50,000", "description": "B2B销售经验，熟悉欧洲市场，英文流利。", "url": "https://example.com/job8", "source": "Indeed", "likes": 15, "created_at": "2024-01-08"},
-]
+# 内存存储
+jobs_db = []
+comments_db = []
+likes_db = {}
 
-# 内存存储评论和点赞
-comments = [
-    {"id": 1, "job_id": 1, "content": "很棒的职位！请问需要签证支持吗？", "author": "张三", "created_at": "2024-01-15"},
-    {"id": 2, "job_id": 1, "content": "请问这个岗位接受远程吗？", "author": "李四", "created_at": "2024-01-15"},
-    {"id": 3, "job_id": 2, "content": "公司氛围怎么样？", "author": "王五", "created_at": "2024-01-14"},
-]
+# ============== 爬虫模块 ==============
+class JobScraper:
+    """职位爬虫"""
 
-likes = {job["id"]: job["likes"] for job in SAMPLE_JOBS}
+    def __init__(self):
+        self.headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
 
-class JobCreate(BaseModel):
-    title: str
-    company: str
-    location: str
-    country: str
-    category: str
-    salary_range: Optional[str] = None
-    description: str
-    url: str
-    source: str
-    likes: int = 0
+    async def scrape_indeed(self, country: str, keyword: str, limit: int = 10):
+        """爬取 Indeed 网站"""
+        country_urls = {
+            "德国": "https://de.indeed.com",
+            "法国": "https://fr.indeed.com",
+            "英国": "https://www.indeed.co.uk",
+            "荷兰": "https://www.indeed.nl",
+        }
+        base_url = country_urls.get(country, "https://de.indeed.com")
+        url = f"{base_url}/jobs?q={keyword}&l="
 
-class JobResponse(JobCreate):
-    id: int
-    created_at: str
+        jobs = []
+        try:
+            async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+                resp = await client.get(url, headers=self.headers)
+                soup = BeautifulSoup(resp.text, "html.parser")
 
-    class Config:
-        from_attributes = True
+                job_cards = soup.select(".jobsearch-ResultsList > li")[:limit]
 
-class CommentCreate(BaseModel):
-    job_id: int
-    content: str
-    author: str
+                for card in job_cards:
+                    try:
+                        title_elem = card.select_one(".jobTitle")
+                        if not title_elem:
+                            continue
 
-class CommentResponse(CommentCreate):
-    id: int
-    created_at: str
+                        title = title_elem.get_text(strip=True)
+                        link = title_elem.find("a")
+                        job_url = f"{base_url}{link.get('href')}" if link else ""
 
-    class Config:
-        from_attributes = True
+                        company = card.select_one(".companyName")
+                        company = company.get_text(strip=True) if company else "未知公司"
+
+                        location = card.select_one(".companyLocation")
+                        location = location.get_text(strip=True) if location else ""
+
+                        salary = card.select_one(".salaryText")
+                        salary_range = salary.get_text(strip=True) if salary else ""
+
+                        summary = card.select_one(".job-snippet")
+                        description = summary.get_text(strip=True)[:500] if summary else ""
+
+                        if title and job_url:
+                            jobs.append({
+                                "title": title,
+                                "company": company,
+                                "location": location,
+                                "country": country,
+                                "category": self.categorize(title, description),
+                                "salary_range": salary_range,
+                                "description": description,
+                                "url": job_url,
+                                "source": "Indeed",
+                            })
+                    except Exception as e:
+                        continue
+        except Exception as e:
+            print(f"Scraping Indeed {country} error: {e}")
+
+        return jobs
+
+    def categorize(self, title: str, description: str) -> str:
+        """自动分类"""
+        text = (title + " " + description).lower()
+        if any(w in text for w in ["software", "developer", "engineer", "python", "java", "frontend", "backend", "data", "ai"]):
+            return "技术"
+        elif any(w in text for w in ["finance", "financial", "accounting", "bank"]):
+            return "金融"
+        elif any(w in text for w in ["marketing", "digital", "seo", "content", "brand"]):
+            return "市场"
+        elif any(w in text for w in ["sales", "account", "business"]):
+            return "销售"
+        elif any(w in text for w in ["design", "designer", "ui", "ux"]):
+            return "设计"
+        elif any(w in text for w in ["hr", "human resources", "recruiter"]):
+            return "人力"
+        else:
+            return "运营"
+
+# 初始化爬虫并执行
+scraper = JobScraper()
+
+async def run_scraper():
+    """运行爬虫并更新数据"""
+    print("🚀 开始自动爬取职位信息...")
+
+    countries = ["德国", "法国", "英国"]
+    keywords = ["python", "software developer", "data scientist"]
+
+    all_jobs = []
+    for country in countries:
+        for keyword in keywords:
+            try:
+                jobs = await scraper.scrape_indeed(country, keyword, limit=15)
+                all_jobs.extend(jobs)
+                print(f"  ✅ {country} - {keyword}: 获取 {len(jobs)} 个职位")
+            except Exception as e:
+                print(f"  ❌ {country} - {keyword} 失败")
+
+    # 去重
+    seen = set()
+    unique_jobs = []
+    for job in all_jobs:
+        if job["url"] not in seen:
+            seen.add(job["url"])
+            job["id"] = len(unique_jobs) + 1
+            job["likes"] = 0
+            job["created_at"] = datetime.now().strftime("%Y-%m-%d")
+            unique_jobs.append(job)
+
+    global jobs_db
+    jobs_db = unique_jobs
+    print(f"🎉 共获取 {len(jobs_db)} 个职位")
+
+# 启动时自动爬取
+@app.on_event("startup")
+async def startup():
+    asyncio.create_task(run_scraper())
 
 # ============== API 端点 ==============
 
@@ -72,7 +156,13 @@ class CommentResponse(CommentCreate):
 async def root():
     return {"message": "EuroJobs API", "version": "1.0.0"}
 
-@app.get("/api/jobs", response_model=List[JobResponse])
+@app.get("/api/scrape")
+async def trigger_scrape():
+    """手动触发爬虫"""
+    await run_scraper()
+    return {"message": f"爬取完成，共 {len(jobs_db)} 个职位"}
+
+@app.get("/api/jobs", response_model=List[dict])
 async def get_jobs(
     country: Optional[str] = None,
     category: Optional[str] = None,
@@ -81,55 +171,54 @@ async def get_jobs(
     offset: int = 0
 ):
     """获取职位列表"""
-    jobs = SAMPLE_JOBS.copy()
+    jobs = jobs_db.copy()
 
     if country and country != "全部":
-        jobs = [j for j in jobs if j["country"] == country]
+        jobs = [j for j in jobs if j.get("country") == country]
 
     if category and category != "全部":
-        jobs = [j for j in jobs if j["category"] == category]
+        jobs = [j for j in jobs if j.get("category") == category]
 
     if search:
         search_lower = search.lower()
-        jobs = [j for j in jobs if search_lower in j["title"].lower() or search_lower in j["company"].lower()]
+        jobs = [j for j in jobs if search_lower in j.get("title", "").lower() or search_lower in j.get("company", "").lower()]
 
     return jobs[offset:offset+limit]
 
-@app.get("/api/jobs/{job_id}", response_model=JobResponse)
+@app.get("/api/jobs/{job_id}", response_model=dict)
 async def get_job(job_id: int):
-    """获取单个职位详情"""
-    for job in SAMPLE_JOBS:
-        if job["id"] == job_id:
+    """获取职位详情"""
+    for job in jobs_db:
+        if job.get("id") == job_id:
             return job
     raise HTTPException(status_code=404, detail="Job not found")
 
 @app.post("/api/jobs/{job_id}/like")
 async def like_job(job_id: int):
     """点赞职位"""
-    if job_id not in likes:
-        raise HTTPException(status_code=404, detail="Job not found")
-    likes[job_id] = likes.get(job_id, 0) + 1
-    return {"likes": likes[job_id]}
+    for job in jobs_db:
+        if job.get("id") == job_id:
+            job["likes"] = job.get("likes", 0) + 1
+            return {"likes": job["likes"]}
+    raise HTTPException(status_code=404, detail="Job not found")
 
-@app.get("/api/comments", response_model=List[CommentResponse])
+@app.get("/api/comments", response_model=List[dict])
 async def get_comments(job_id: Optional[int] = None):
-    """获取评论"""
     if job_id:
-        return [c for c in comments if c["job_id"] == job_id]
-    return comments
+        return [c for c in comments_db if c.get("job_id") == job_id]
+    return comments_db
 
-@app.post("/api/comments", response_model=CommentResponse)
-async def create_comment(comment: CommentCreate):
-    """创建评论"""
-    new_id = len(comments) + 1
+@app.post("/api/comments", response_model=dict)
+async def create_comment(comment: dict):
+    new_id = len(comments_db) + 1
     new_comment = {
         "id": new_id,
-        "job_id": comment.job_id,
-        "content": comment.content,
-        "author": comment.author,
-        "created_at": "2024-01-15"
+        "job_id": comment.get("job_id"),
+        "content": comment.get("content"),
+        "author": comment.get("author"),
+        "created_at": datetime.now().strftime("%Y-%m-%d")
     }
-    comments.append(new_comment)
+    comments_db.append(new_comment)
     return new_comment
 
 if __name__ == "__main__":
