@@ -5,6 +5,10 @@ from typing import List, Optional
 import asyncpg
 import os
 import asyncio
+import sys
+
+# 添加当前目录到 Python 路径
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from datetime import datetime
 
 app = FastAPI(title="EuroJobs API")
@@ -58,6 +62,47 @@ class CommentResponse(CommentCreate):
     class Config:
         from_attributes = True
 
+async def init_db():
+    """初始化数据库表"""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS jobs (
+                id SERIAL PRIMARY KEY,
+                title VARCHAR(255) NOT NULL,
+                company VARCHAR(255) NOT NULL,
+                location VARCHAR(100),
+                country VARCHAR(50) NOT NULL,
+                category VARCHAR(50),
+                salary_range VARCHAR(100),
+                description TEXT,
+                url TEXT NOT NULL,
+                source VARCHAR(50) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                likes INTEGER DEFAULT 0
+            )
+        """)
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS comments (
+                id SERIAL PRIMARY KEY,
+                job_id INTEGER REFERENCES jobs(id) ON DELETE CASCADE,
+                content TEXT NOT NULL,
+                author VARCHAR(100) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        # 添加 url 唯一约束用于去重
+        await conn.execute("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'jobs_url_key') THEN
+                    ALTER TABLE jobs ADD CONSTRAINT jobs_url_key UNIQUE (url);
+                END IF;
+            END
+            $$
+        """)
+        print("✅ 数据库表初始化完成")
+
 # ============== 自动爬虫功能 ==============
 async def scrape_and_save():
     """爬取职位并保存到数据库"""
@@ -65,7 +110,8 @@ async def scrape_and_save():
         # 动态导入爬虫模块
         import sys
         sys.path.append('backend')
-        from scrapers.indeed import scrape_all, IndeedScraper
+        from scrapers.indeed import IndeedScraper
+        scraper = IndeedScraper()
 
         print("🔄 开始自动爬取职位信息...")
 
@@ -121,7 +167,8 @@ async def start_scheduler():
 
 @app.on_event("startup")
 async def startup_event():
-    """服务启动时自动运行爬虫"""
+    """服务启动时自动运行"""
+    await init_db()  # 先初始化数据库表
     # 启动后台爬虫任务
     asyncio.create_task(start_scheduler())
     # 立即执行一次爬虫
