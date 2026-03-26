@@ -158,7 +158,13 @@ async def root():
 async def manual_scrape():
     """手动触发爬虫"""
     await scrape_and_save()
-    return {"message": "爬虫已启动"}
+    return {"message": "爬虫已完成"}
+
+@app.get("/api/init")
+async def init_db_endpoint():
+    """手动初始化数据库"""
+    await init_db()
+    return {"message": "数据库初始化完成"}
 
 @app.get("/api/jobs", response_model=List[JobResponse])
 async def get_jobs(
