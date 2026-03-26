@@ -134,6 +134,51 @@ class JobScraper:
             print(f"Scraping error: {e}")
         return jobs
 
+    async def scrape_remoteok(self, keyword: str, limit: int = 10):
+        """爬取 Remote OK（远程工作，更容易）"""
+        url = f"https://remoteok.com/remote-{keyword.lower().replace(' ', '-')}-jobs"
+
+        jobs = []
+        try:
+            async with httpx.AsyncClient(timeout=30.0, follow_redirects=True, headers=self.headers) as client:
+                resp = await client.get(url)
+                soup = BeautifulSoup(resp.text, "html.parser")
+
+                job_cards = soup.select("tr.job")[:limit]
+
+                for card in job_cards:
+                    try:
+                        title_elem = card.select_one("h2 a") or card.select_one(".title a")
+                        if not title_elem:
+                            continue
+
+                        title = title_elem.get_text(strip=True)
+                        job_url = "https://remoteok.com" + title_elem.get("href", "") if title_elem.get("href") else ""
+
+                        company = card.select_one(".company") or card.select_one("a[rel='company']")
+                        company = company.get_text(strip=True) if company else "未知公司"
+
+                        location = "远程"
+
+                        if title and job_url:
+                            jobs.append({
+                                "title": title,
+                                "company": company,
+                                "location": location,
+                                "country": "远程",
+                                "category": self.categorize(title, ""),
+                                "salary_range": "",
+                                "description": f"远程工作 - {title}",
+                                "url": job_url,
+                                "source": "RemoteOK",
+                            })
+                    except:
+                        continue
+        except Exception as e:
+            print(f"RemoteOK scraping error: {e}")
+
+        return jobs
+
     def categorize(self, title: str, description: str) -> str:
         text = (title + " " + description).lower()
         if any(w in text for w in ["software", "developer", "engineer", "python", "java", "frontend", "backend", "data", "ai"]):
@@ -158,6 +203,9 @@ async def run_scraper():
     keywords = ["python", "software developer"]
 
     all_jobs = []
+
+    # 1. 尝试爬取 Indeed (可能被拦截)
+    print("📡 尝试爬取 Indeed...")
     for country in countries:
         for keyword in keywords:
             try:
@@ -166,6 +214,17 @@ async def run_scraper():
                 print(f"  ✅ {country} - {keyword}: {len(jobs)} 个职位")
             except Exception as e:
                 print(f"  ❌ {country} - {keyword} 失败")
+
+    # 2. 尝试爬取 Remote OK (更容易)
+    if not all_jobs:
+        print("📡 尝试爬取 Remote OK...")
+        for keyword in keywords:
+            try:
+                jobs = await scraper.scrape_remoteok(keyword, limit=10)
+                all_jobs.extend(jobs)
+                print(f"  ✅ Remote OK - {keyword}: {len(jobs)} 个职位")
+            except Exception as e:
+                print(f"  ❌ Remote OK - {keyword} 失败")
 
     # 保存到数据库
     if all_jobs:
