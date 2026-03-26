@@ -187,50 +187,22 @@ async def run_scraper():
 
     # 1. Adzuna API (需要真实API key)
     print("📡 尝试 Adzuna API...")
-    # 全部欧洲国家
+    # 主要欧洲国家 (减少以避免超时)
     countries = [
-        # 西欧
-        "德国", "法国", "英国", "荷兰", "比利时", "爱尔兰", "奥地利", "瑞士", "卢森堡",
-        # 北欧
-        "瑞典", "挪威", "丹麦", "芬兰", "冰岛",
-        # 南欧
-        "西班牙", "意大利", "葡萄牙", "希腊", "马耳他", "塞浦路斯",
-        # 东欧
-        "波兰", "捷克", "匈牙利", "罗马尼亚", "保加利亚", "斯洛伐克", "斯洛文尼亚", "克罗地亚", "爱沙尼亚", "拉脱维亚", "立陶宛"
+        "德国", "法国", "英国", "荷兰", "西班牙", "意大利", "瑞典", "芬兰", "波兰", "丹麦", "挪威", "瑞士", "比利时", "爱尔兰", "奥地利"
     ]
 
-    # 所有类别关键词 - 尽可能全面
+    # 热门关键词
     keywords = [
-        # IT/技术
-        "python", "javascript", "java", "software", "developer", "engineer", "data scientist",
-        "frontend", "backend", "full stack", "web", "mobile", "app", "cloud", "devops", "AI",
-        "machine learning", "deep learning", "cybersecurity", "blockchain", "QA", "tester",
-        "IT support", "system administrator", "network", "database", "SQL", "Linux",
-        # 产品/设计
-        "product manager", "project manager", "designer", "UX", "UI", "graphic", "video",
-        "game", "3D", "animation", "UX researcher", "product owner",
-        # 金融/会计
-        "accountant", "accounting", "finance", "financial", "banking", "analyst", "auditor",
-        "controller", "treasury", "risk", "investment", "tax", "actuary",
-        # 市场/销售
-        "marketing", "sales", "digital", "SEO", "SEM", "social media", "content",
-        "brand", "PR", "communication", "growth", "business development", "account manager",
-        "account executive", "sales manager", "representative", "consultant",
-        # 人力资源
-        "HR", "human resources", "recruiter", "talent", "recruitment", "training",
-        "people operations", "HR manager", "benefits", "compensation",
-        # 运营
-        "operations", "manager", "director", "executive", "supply chain", "logistics",
-        "procurement", "customer service", "support", "call center", "quality",
-        # 医疗/教育
-        "nurse", "doctor", "medical", "healthcare", "pharma", "biotech",
-        "teacher", "education", "trainer", "instructor", "professor",
-        # 制造/工程
-        "engineer", "manufacturing", "production", "mechanical", "electrical",
-        "civil", "process", "quality engineer", "safety",
-        # 其他
-        "assistant", "secretary", "admin", "legal", "compliance", "logistics",
-        "purchasing", "real estate", "logistics", "facilities"
+        "python", "java", "javascript", "software", "developer", "engineer", "data scientist",
+        "frontend", "backend", "full stack", "web", "cloud", "devops", "machine learning",
+        "product manager", "project manager", "designer", "UX",
+        "accountant", "finance", "financial", "banking",
+        "marketing", "sales", "digital",
+        "HR", "human resources", "recruiter",
+        "operations", "customer service",
+        "nurse", "medical", "healthcare",
+        "teacher", "education", "trainer"
     ]
 
     print(f"🔍 开始爬取 {len(countries)} 个国家，{len(keywords)} 个关键词...")
@@ -238,14 +210,13 @@ async def run_scraper():
     for country in countries:
         for keyword in keywords:
             try:
-                jobs = await scraper.scrape_adzuna(country, keyword, limit=10)
+                jobs = await scraper.scrape_adzuna(country, keyword, limit=5)  # 减少到5个
                 if jobs:
                     all_jobs.extend(jobs)
-                    print(f"  ✅ {country} - {keyword}: {len(jobs)} 个")
             except Exception as e:
                 pass
 
-    print(f"📊 初步获取 {len(all_jobs)} 个职位")
+    print(f"📊 获取 {len(all_jobs)} 个职位")
 
     # 2. 如果没数据，使用扩展的示例数据
     if len(all_jobs) < 5:
