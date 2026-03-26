@@ -2,14 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
-import asyncpg
 import os
-import asyncio
-import sys
-
-# 添加当前目录到 Python 路径
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from datetime import datetime
 
 app = FastAPI(title="EuroJobs API")
 
@@ -21,15 +14,26 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/eurojobs")
+# 示例职位数据 (不需要数据库)
+SAMPLE_JOBS = [
+    {"id": 1, "title": "Senior Python Developer", "company": "TechCorp Berlin", "location": "Berlin", "country": "德国", "category": "技术", "salary_range": "€70,000 - €100,000", "description": "Python后端开发，熟练掌握Django/FastAPI，有欧洲工作经历优先。", "url": "https://example.com/job1", "source": "Indeed", "likes": 42, "created_at": "2024-01-15"},
+    {"id": 2, "title": "Frontend Engineer", "company": "WebSolutions Paris", "location": "Paris", "country": "法国", "category": "技术", "salary_range": "€55,000 - €75,000", "description": "React/Vue开发，热爱前端技术，有大型项目经验。", "url": "https://example.com/job2", "source": "LinkedIn", "likes": 28, "created_at": "2024-01-14"},
+    {"id": 3, "title": "Data Scientist", "company": "DataCo London", "location": "London", "country": "英国", "category": "技术", "salary_range": "£50,000 - £70,000", "description": "数据分析，机器学习，Python/R，必须有相关经验。", "url": "https://example.com/job3", "source": "Indeed", "likes": 35, "created_at": "2024-01-13"},
+    {"id": 4, "title": "Marketing Manager", "company": "BrandCo Amsterdam", "location": "Amsterdam", "country": "荷兰", "category": "市场", "salary_range": "€50,000 - €70,000", "description": "数字营销经验，熟悉欧洲市场，英文流利。", "url": "https://example.com/job4", "source": "LinkedIn", "likes": 19, "created_at": "2024-01-12"},
+    {"id": 5, "title": "UX Designer", "company": "DesignHub Stockholm", "location": "Stockholm", "country": "瑞典", "category": "设计", "salary_range": "SEK 50,000 - 70,000", "description": "用户体验设计，熟练使用Figma，有作品集。", "url": "https://example.com/job5", "source": "Indeed", "likes": 31, "created_at": "2024-01-11"},
+    {"id": 6, "title": "Product Manager", "company": "Innovate GmbH", "location": "Munich", "country": "德国", "category": "运营", "salary_range": "€65,000 - €90,000", "description": "产品管理，有技术背景优先，协调能力强。", "url": "https://example.com/job6", "source": "LinkedIn", "likes": 24, "created_at": "2024-01-10"},
+    {"id": 7, "title": "DevOps Engineer", "company": "CloudTech Paris", "location": "Lyon", "country": "法国", "category": "技术", "salary_range": "€60,000 - €85,000", "description": "Kubernetes, AWS, CI/CD经验丰富。", "url": "https://example.com/job7", "source": "Indeed", "likes": 45, "created_at": "2024-01-09"},
+    {"id": 8, "title": "Sales Representative", "company": "TradeCo London", "location": "Manchester", "country": "英国", "category": "销售", "salary_range": "£35,000 - £50,000", "description": "B2B销售经验，熟悉欧洲市场，英文流利。", "url": "https://example.com/job8", "source": "Indeed", "likes": 15, "created_at": "2024-01-08"},
+]
 
-pool: Optional[asyncpg.Pool] = None
+# 内存存储评论和点赞
+comments = [
+    {"id": 1, "job_id": 1, "content": "很棒的职位！请问需要签证支持吗？", "author": "张三", "created_at": "2024-01-15"},
+    {"id": 2, "job_id": 1, "content": "请问这个岗位接受远程吗？", "author": "李四", "created_at": "2024-01-15"},
+    {"id": 3, "job_id": 2, "content": "公司氛围怎么样？", "author": "王五", "created_at": "2024-01-14"},
+]
 
-async def get_pool():
-    global pool
-    if pool is None:
-        pool = await asyncpg.create_pool(DATABASE_URL, min_size=2, max_size=10)
-    return pool
+likes = {job["id"]: job["likes"] for job in SAMPLE_JOBS}
 
 class JobCreate(BaseModel):
     title: str
@@ -62,109 +66,11 @@ class CommentResponse(CommentCreate):
     class Config:
         from_attributes = True
 
-async def init_db():
-    """初始化数据库表"""
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS jobs (
-                id SERIAL PRIMARY KEY,
-                title VARCHAR(255) NOT NULL,
-                company VARCHAR(255) NOT NULL,
-                location VARCHAR(100),
-                country VARCHAR(50) NOT NULL,
-                category VARCHAR(50),
-                salary_range VARCHAR(100),
-                description TEXT,
-                url TEXT NOT NULL,
-                source VARCHAR(50) NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                likes INTEGER DEFAULT 0
-            )
-        """)
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS comments (
-                id SERIAL PRIMARY KEY,
-                job_id INTEGER REFERENCES jobs(id) ON DELETE CASCADE,
-                content TEXT NOT NULL,
-                author VARCHAR(100) NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        # 添加 url 唯一约束用于去重
-        await conn.execute("""
-            DO $$
-            BEGIN
-                IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'jobs_url_key') THEN
-                    ALTER TABLE jobs ADD CONSTRAINT jobs_url_key UNIQUE (url);
-                END IF;
-            END
-            $$
-        """)
-        print("✅ 数据库表初始化完成")
-
-# ============== 自动爬虫功能 ==============
-async def scrape_and_save():
-    """爬取职位并保存到数据库（简化版）"""
-    print("🔄 开始自动爬取职位信息...")
-    # 模拟插入一些示例数据
-    pool = await get_pool()
-    sample_jobs = [
-        {"title": "Senior Python Developer", "company": "TechCorp Berlin", "location": "Berlin", "country": "德国", "category": "技术", "salary_range": "€70,000 - €100,000", "description": "Python后端开发", "url": "https://example.com/job1", "source": "Indeed"},
-        {"title": "Frontend Engineer", "company": "WebSolutions Paris", "location": "Paris", "country": "法国", "category": "技术", "salary_range": "€55,000 - €75,000", "description": "React开发", "url": "https://example.com/job2", "source": "LinkedIn"},
-        {"title": "Data Scientist", "company": "DataCo London", "location": "London", "country": "英国", "category": "技术", "salary_range": "£50,000 - £70,000", "description": "数据分析", "url": "https://example.com/job3", "source": "Indeed"},
-        {"title": "Marketing Manager", "company": "BrandCo Amsterdam", "location": "Amsterdam", "country": "荷兰", "category": "市场", "salary_range": "€50,000 - €70,000", "description": "市场营销", "url": "https://example.com/job4", "source": "LinkedIn"},
-        {"title": "UX Designer", "company": "DesignHub Stockholm", "location": "Stockholm", "country": "瑞典", "category": "设计", "salary_range": "SEK 50,000 - 70,000", "description": "用户体验设计", "url": "https://example.com/job5", "source": "Indeed"},
-    ]
-    async with pool.acquire() as conn:
-        for job in sample_jobs:
-            try:
-                await conn.execute(
-                    """INSERT INTO jobs (title, company, location, country, category, salary_range, description, url, source, likes)
-                       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-                       ON CONFLICT (url) DO NOTHING""",
-                    job['title'], job['company'], job['location'], job['country'],
-                    job['category'], job['salary_range'], job['description'],
-                    job['url'], job['source'], 0
-                )
-            except Exception as e:
-                print(f"  ❌ 插入失败: {e}")
-    print(f"✅ 示例职位数据已保存")
-
-async def start_scheduler():
-    """定时任务：每6小时爬取一次"""
-    import time
-    while True:
-        await scrape_and_save()
-        # 等待6小时 (6 * 60 * 60 秒)
-        await asyncio.sleep(6 * 60 * 60)
-
-@app.on_event("startup")
-async def startup_event():
-    """服务启动时自动运行"""
-    await init_db()  # 先初始化数据库表
-    # 启动后台爬虫任务
-    asyncio.create_task(start_scheduler())
-    # 立即执行一次爬虫
-    asyncio.create_task(scrape_and_save())
-
 # ============== API 端点 ==============
 
 @app.get("/")
 async def root():
     return {"message": "EuroJobs API", "version": "1.0.0"}
-
-@app.get("/api/scrape")
-async def manual_scrape():
-    """手动触发爬虫"""
-    await scrape_and_save()
-    return {"message": "爬虫已完成"}
-
-@app.get("/api/init")
-async def init_db_endpoint():
-    """手动初始化数据库"""
-    await init_db()
-    return {"message": "数据库初始化完成"}
 
 @app.get("/api/jobs", response_model=List[JobResponse])
 async def get_jobs(
@@ -174,91 +80,57 @@ async def get_jobs(
     limit: int = 50,
     offset: int = 0
 ):
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        query = "SELECT * FROM jobs WHERE 1=1"
-        params = []
-        param_count = 1
+    """获取职位列表"""
+    jobs = SAMPLE_JOBS.copy()
 
-        if country and country != "全部":
-            query += f" AND country = ${param_count}"
-            params.append(country)
-            param_count += 1
+    if country and country != "全部":
+        jobs = [j for j in jobs if j["country"] == country]
 
-        if category and category != "全部":
-            query += f" AND category = ${param_count}"
-            params.append(category)
-            param_count += 1
+    if category and category != "全部":
+        jobs = [j for j in jobs if j["category"] == category]
 
-        if search:
-            query += f" AND (title ILIKE ${param_count} OR company ILIKE ${param_count})"
-            params.append(f"%{search}%")
-            param_count += 1
+    if search:
+        search_lower = search.lower()
+        jobs = [j for j in jobs if search_lower in j["title"].lower() or search_lower in j["company"].lower()]
 
-        query += f" ORDER BY created_at DESC LIMIT ${param_count} OFFSET ${param_count + 1}"
-        params.extend([limit, offset])
-
-        rows = await conn.fetch(query, *params)
-        return [dict(row) for row in rows]
+    return jobs[offset:offset+limit]
 
 @app.get("/api/jobs/{job_id}", response_model=JobResponse)
 async def get_job(job_id: int):
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        row = await conn.fetchrow("SELECT * FROM jobs WHERE id = $1", job_id)
-        if not row:
-            raise HTTPException(status_code=404, detail="Job not found")
-        return dict(row)
-
-@app.post("/api/jobs", response_model=JobResponse)
-async def create_job(job: JobCreate):
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            """INSERT INTO jobs (title, company, location, country, category, salary_range, description, url, source, likes)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-               RETURNING *""",
-            job.title, job.company, job.location, job.country, job.category,
-            job.salary_range, job.description, job.url, job.source, job.likes
-        )
-        return dict(row)
+    """获取单个职位详情"""
+    for job in SAMPLE_JOBS:
+        if job["id"] == job_id:
+            return job
+    raise HTTPException(status_code=404, detail="Job not found")
 
 @app.post("/api/jobs/{job_id}/like")
 async def like_job(job_id: int):
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            "UPDATE jobs SET likes = likes + 1 WHERE id = $1 RETURNING likes",
-            job_id
-        )
-        if not row:
-            raise HTTPException(status_code=404, detail="Job not found")
-        return {"likes": row["likes"]}
+    """点赞职位"""
+    if job_id not in likes:
+        raise HTTPException(status_code=404, detail="Job not found")
+    likes[job_id] = likes.get(job_id, 0) + 1
+    return {"likes": likes[job_id]}
 
 @app.get("/api/comments", response_model=List[CommentResponse])
 async def get_comments(job_id: Optional[int] = None):
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        if job_id:
-            rows = await conn.fetch(
-                "SELECT * FROM comments WHERE job_id = $1 ORDER BY created_at DESC",
-                job_id
-            )
-        else:
-            rows = await conn.fetch("SELECT * FROM comments ORDER BY created_at DESC")
-        return [dict(row) for row in rows]
+    """获取评论"""
+    if job_id:
+        return [c for c in comments if c["job_id"] == job_id]
+    return comments
 
 @app.post("/api/comments", response_model=CommentResponse)
 async def create_comment(comment: CommentCreate):
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            """INSERT INTO comments (job_id, content, author)
-               VALUES ($1, $2, $3)
-               RETURNING *""",
-            comment.job_id, comment.content, comment.author
-        )
-        return dict(row)
+    """创建评论"""
+    new_id = len(comments) + 1
+    new_comment = {
+        "id": new_id,
+        "job_id": comment.job_id,
+        "content": comment.content,
+        "author": comment.author,
+        "created_at": "2024-01-15"
+    }
+    comments.append(new_comment)
+    return new_comment
 
 if __name__ == "__main__":
     import uvicorn
