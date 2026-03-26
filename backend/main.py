@@ -235,34 +235,38 @@ async def trigger_scrape():
     await run_scraper()
     return {"message": "爬取完成"}
 
-@app.get("/api/jobs", response_model=List[dict])
+@app.get("/api/jobs")
 async def get_jobs(country: Optional[str] = None, category: Optional[str] = None, search: Optional[str] = None, limit: int = 50, offset: int = 0):
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        query = "SELECT * FROM jobs WHERE 1=1"
-        params = []
-        param_count = 1
+    try:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            query = "SELECT * FROM jobs WHERE 1=1"
+            params = []
+            param_count = 1
 
-        if country and country != "全部":
-            query += f" AND country = ${param_count}"
-            params.append(country)
-            param_count += 1
+            if country and country != "全部":
+                query += f" AND country = ${param_count}"
+                params.append(country)
+                param_count += 1
 
-        if category and category != "全部":
-            query += f" AND category = ${param_count}"
-            params.append(category)
-            param_count += 1
+            if category and category != "全部":
+                query += f" AND category = ${param_count}"
+                params.append(category)
+                param_count += 1
 
-        if search:
-            query += f" AND (title ILIKE ${param_count} OR company ILIKE ${param_count})"
-            params.append(f"%{search}%")
-            param_count += 1
+            if search:
+                query += f" AND (title ILIKE ${param_count} OR company ILIKE ${param_count})"
+                params.append(f"%{search}%")
+                param_count += 1
 
-        query += f" ORDER BY created_at DESC LIMIT ${param_count} OFFSET ${param_count + 1}"
-        params.extend([limit, offset])
+            query += f" ORDER BY created_at DESC LIMIT ${param_count} OFFSET ${param_count + 1}"
+            params.extend([limit, offset])
 
-        rows = await conn.fetch(query, *params)
-        return [dict(row) for row in rows]
+            rows = await conn.fetch(query, *params)
+            return [dict(row) for row in rows]
+    except Exception as e:
+        print(f"Error fetching jobs: {e}")
+        return []
 
 @app.get("/api/jobs/{job_id}", response_model=dict)
 async def get_job(job_id: int):
