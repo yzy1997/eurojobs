@@ -244,30 +244,42 @@ async def run_scraper():
                     pass
         print(f"🎉 共保存 {len(all_jobs)} 个职位到数据库")
     else:
-        # 如果爬虫没有获取到数据，插入示例数据
-        print("⚠️ 爬虫未获取到数据，插入示例数据...")
+        # 如果爬虫没有获取到数据，刷新示例数据
+        print("⚠️ 爬虫未获取到数据，更新示例数据...")
         sample_jobs = [
-            {"title": "Senior Python Developer", "company": "TechCorp Berlin", "location": "Berlin", "country": "德国", "category": "技术", "salary_range": "€70,000 - €100,000", "description": "Python后端开发", "url": "https://example.com/job1", "source": "Indeed"},
-            {"title": "Frontend Engineer", "company": "WebSolutions Paris", "location": "Paris", "country": "法国", "category": "技术", "salary_range": "€55,000 - €75,000", "description": "React开发", "url": "https://example.com/job2", "source": "LinkedIn"},
-            {"title": "Data Scientist", "company": "DataCo London", "location": "London", "country": "英国", "category": "技术", "salary_range": "£50,000 - £70,000", "description": "数据分析", "url": "https://example.com/job3", "source": "Indeed"},
-            {"title": "Marketing Manager", "company": "BrandCo Amsterdam", "location": "Amsterdam", "country": "荷兰", "category": "市场", "salary_range": "€50,000 - €70,000", "description": "市场营销", "url": "https://example.com/job4", "source": "LinkedIn"},
-            {"title": "UX Designer", "company": "DesignHub Stockholm", "location": "Stockholm", "country": "瑞典", "category": "设计", "salary_range": "SEK 50,000 - 70,000", "description": "用户体验设计", "url": "https://example.com/job5", "source": "Indeed"},
+            # 德国
+            {"title": "Senior Python Developer", "company": "TechCorp Berlin", "location": "Berlin", "country": "德国", "category": "技术", "salary_range": "€70,000 - €100,000", "description": "Python后端开发，熟练掌握Django/FastAPI，有欧洲工作经历优先。", "url": "https://de.example.com/python-dev-1", "source": "Indeed"},
+            {"title": "Data Engineer", "company": "DataTech Munich", "location": "Munich", "country": "德国", "category": "技术", "salary_range": "€65,000 - €90,000", "description": "数据工程，熟悉Python、SQL、Spark。", "url": "https://de.example.com/data-eng-2", "source": "LinkedIn"},
+            {"title": "DevOps Engineer", "company": "CloudScale Berlin", "location": "Berlin", "country": "德国", "category": "技术", "salary_range": "€75,000 - €95,000", "description": "Kubernetes, AWS, CI/CD经验丰富。", "url": "https://de.example.com/devops-3", "source": "Indeed"},
+            # 法国
+            {"title": "Frontend Engineer", "company": "WebSolutions Paris", "location": "Paris", "country": "法国", "category": "技术", "salary_range": "€55,000 - €75,000", "description": "React/Vue开发，热爱前端技术。", "url": "https://fr.example.com/frontend-4", "source": "LinkedIn"},
+            {"title": "ML Engineer", "company": "AI Lab Paris", "location": "Paris", "country": "法国", "category": "技术", "salary_range": "€60,000 - €85,000", "description": "机器学习，熟悉PyTorch/TensorFlow。", "url": "https://fr.example.com/ml-5", "source": "Indeed"},
+            # 英国
+            {"title": "Data Scientist", "company": "DataCo London", "location": "London", "country": "英国", "category": "技术", "salary_range": "£50,000 - £70,000", "description": "数据分析，机器学习，Python/R。", "url": "https://uk.example.com/data-sci-6", "source": "Indeed"},
+            {"title": "Backend Developer", "company": "FinTech London", "location": "London", "country": "英国", "category": "技术", "salary_range": "£55,000 - £80,000", "description": "后端开发，Java/Python，微服务架构。", "url": "https://uk.example.com/backend-7", "source": "LinkedIn"},
+            # 荷兰
+            {"title": "Marketing Manager", "company": "BrandCo Amsterdam", "location": "Amsterdam", "country": "荷兰", "category": "市场", "salary_range": "€50,000 - €70,000", "description": "数字营销经验，熟悉欧洲市场。", "url": "https://nl.example.com/marketing-8", "source": "LinkedIn"},
+            # 远程
+            {"title": "Remote Python Developer", "company": "RemoteFirst", "location": "Remote", "country": "远程", "category": "技术", "salary_range": "$80,000 - $120,000", "description": "远程工作，Python全栈开发。", "url": "https://remote.example.com/python-9", "source": "RemoteOK"},
+            {"title": "Remote Designer", "company": "DesignAnywhere", "location": "Remote", "country": "远程", "category": "设计", "salary_range": "$60,000 - $90,000", "description": "远程工作，UI/UX设计。", "url": "https://remote.example.com/designer-10", "source": "RemoteOK"},
         ]
         pool = await get_pool()
         async with pool.acquire() as conn:
+            # 删除旧数据
+            await conn.execute("DELETE FROM jobs")
+            # 插入新数据
             for job in sample_jobs:
                 try:
                     await conn.execute(
                         """INSERT INTO jobs (title, company, location, country, category, salary_range, description, url, source, likes)
-                           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-                           ON CONFLICT (url) DO NOTHING""",
+                           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)""",
                         job["title"], job["company"], job["location"], job["country"],
                         job["category"], job["salary_range"], job["description"],
                         job["url"], job["source"], 0
                     )
                 except Exception as e:
-                    pass
-        print("✅ 示例数据插入完成")
+                    print(f"插入错误: {e}")
+        print("✅ 示例数据更新完成，共10个职位")
 
 # ============== 启动事件 ==============
 @app.on_event("startup")
