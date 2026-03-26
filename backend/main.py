@@ -224,10 +224,45 @@ def get_extended_sample_data():
         {"title": "Remote Data Scientist", "company": "Toptal", "location": "Remote", "country": "远程", "category": "技术", "salary_range": "$100,000 - $150,000", "description": "远程工作，AI/ML", "url": "https://example.com/remote/data-3", "source": "RemoteOK", "likes": 0},
     ]
 
+# ============== 定时爬虫任务 ==============
+import threading
+import time
+
+def start_scheduler():
+    """后台定时爬虫 - 每天凌晨3点执行"""
+    def run_daily():
+        while True:
+            # 计算下次运行时间（每天凌晨3点）
+            now = datetime.now()
+            next_run = now.replace(hour=3, minute=0, second=0, microsecond=0)
+            if now.hour >= 3:
+                next_run = next_run.replace(day=now.day + 1)
+
+            wait_seconds = (next_run - now).total_seconds()
+            print(f"⏰ 定时爬虫: {wait_seconds/3600:.1f} 小时后执行")
+            time.sleep(wait_seconds)
+
+            # 执行爬虫
+            print("🕛 执行定时爬虫...")
+            try:
+                asyncio.run(run_scraper())
+                print("✅ 定时爬虫完成")
+            except Exception as e:
+                print(f"❌ 定时爬虫失败: {e}")
+
+    # 启动后台线程
+    scheduler_thread = threading.Thread(target=run_daily, daemon=True)
+    scheduler_thread.start()
+    print("✅ 定时爬虫服务已启动 (每天凌晨3点)")
+
 # ============== 启动事件 ==============
 @app.on_event("startup")
 async def startup():
     print("✅ EuroJobs API 启动")
+    # 启动定时任务
+    start_scheduler()
+    # 立即执行一次爬虫
+    asyncio.create_task(run_scraper())
 
 # ============== API 端点 ==============
 
