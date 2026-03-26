@@ -74,8 +74,8 @@ class JobScraper:
     async def scrape_adzuna(self, country: str, keyword: str, limit: int = 15):
         """Adzuna API - 需要注册获取真实key"""
         # 使用真实的 Adzuna demo key (可能有限制)
-        app_id = "cd2c7090"
-        app_key = "2c5eb3246d6a6e2c8d5d8e8f7a9b3c4e"
+        app_id = "2ef8c956"
+        app_key = "00569c16b823ed37c3f4253495ae0fbf"
         country_code = {"德国": "de", "法国": "fr", "英国": "gb", "荷兰": "nl"}.get(country, "de")
 
         url = f"https://api.adzuna.com/v1/api/jobs/{country_code}/search?app_id={app_id}&app_key={app_key}&what={keyword}&results_per_page={limit}"
