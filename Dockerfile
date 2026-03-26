@@ -12,5 +12,7 @@ COPY backend/ .
 # Expose port
 EXPOSE 8000
 
+ENV PORT=8000
+
 # Run the app
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD python -m uvicorn main:app --host 0.0.0.0 --port $PORT
