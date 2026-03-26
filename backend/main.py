@@ -4,6 +4,8 @@ from pydantic import BaseModel
 from typing import List, Optional
 import asyncpg
 import os
+import asyncio
+from datetime import datetime
 
 app = FastAPI(title="EuroJobs API")
 
@@ -56,9 +58,86 @@ class CommentResponse(CommentCreate):
     class Config:
         from_attributes = True
 
+# ============== 自动爬虫功能 ==============
+async def scrape_and_save():
+    """爬取职位并保存到数据库"""
+    try:
+        # 动态导入爬虫模块
+        import sys
+        sys.path.append('backend')
+        from scrapers.indeed import scrape_all, IndeedScraper
+
+        print("🔄 开始自动爬取职位信息...")
+
+        # 爬取德国和法国的Python职位
+        countries = ["德国", "法国", "英国"]
+        keywords = ["python", "software developer", "data scientist"]
+
+        all_jobs = []
+        for country in countries:
+            for keyword in keywords:
+                try:
+                    scraper = IndeedScraper()
+                    jobs = await scraper.scrape(country=country, keywords=keyword, limit=10)
+                    all_jobs.extend(jobs)
+                    print(f"  ✅ {country} - {keyword}: 获取 {len(jobs)} 个职位")
+                except Exception as e:
+                    print(f"  ❌ {country} - {keyword} 失败: {e}")
+
+        # 去重并保存到数据库
+        if all_jobs:
+            pool = await get_pool()
+            seen = set()
+            async with pool.acquire() as conn:
+                for job in all_jobs:
+                    # 根据 url 去重
+                    if job['url'] in seen:
+                        continue
+                    seen.add(job['url'])
+
+                    await conn.execute(
+                        """INSERT INTO jobs (title, company, location, country, category, salary_range, description, url, source, likes)
+                           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                           ON CONFLICT (url) DO NOTHING""",
+                        job['title'], job['company'], job['location'], job['country'],
+                        job['category'], job['salary_range'], job['description'],
+                        job['url'], job['source'], job['likes']
+                    )
+
+            print(f"🎉 爬取完成！共保存 {len(seen)} 个新职位")
+        else:
+            print("⚠️ 未获取到任何职位")
+
+    except Exception as e:
+        print(f"❌ 爬虫运行失败: {e}")
+
+async def start_scheduler():
+    """定时任务：每6小时爬取一次"""
+    import time
+    while True:
+        await scrape_and_save()
+        # 等待6小时 (6 * 60 * 60 秒)
+        await asyncio.sleep(6 * 60 * 60)
+
+@app.on_event("startup")
+async def startup_event():
+    """服务启动时自动运行爬虫"""
+    # 启动后台爬虫任务
+    asyncio.create_task(start_scheduler())
+    # 立即执行一次爬虫
+    asyncio.create_task(scrape_and_save())
+
+# ============== API 端点 ==============
+
 @app.get("/")
 async def root():
     return {"message": "EuroJobs API", "version": "1.0.0"}
+
+@app.get("/api/scrape")
+async def manual_scrape():
+    """手动触发爬虫"""
+    await scrape_and_save()
+    return {"message": "爬虫已启动"}
 
 @app.get("/api/jobs", response_model=List[JobResponse])
 async def get_jobs(
