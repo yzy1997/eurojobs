@@ -26,7 +26,10 @@ pool: Optional[asyncpg.Pool] = None
 async def get_pool():
     global pool
     if pool is None:
+        print(f"🔄 正在连接数据库...")
+        print(f"   DATABASE_URL: {DATABASE_URL[:30]}...")  # 打印部分信息
         pool = await asyncpg.create_pool(DATABASE_URL, min_size=2, max_size=10)
+        print(f"✅ 数据库连接成功")
     return pool
 
 # ============== 数据库初始化 ==============
