@@ -143,18 +143,35 @@ async def run_scraper():
     # 1. Adzuna API (需要真实API key)
     print("📡 尝试 Adzuna API...")
     countries = ["德国", "法国", "英国", "荷兰", "西班牙", "意大利", "瑞典", "芬兰", "波兰", "丹麦", "挪威", "瑞士", "奥地利", "比利时", "爱尔兰"]
-    keywords = ["python", "software developer", "data scientist", "frontend developer", "backend developer", "devops", "full stack", "machine learning", "cloud", "data engineer"]
+    keywords = [
+        # 技术
+        "python", "software developer", "data scientist", "frontend developer",
+        "backend developer", "devops", "full stack", "machine learning", "cloud",
+        "data engineer", "software engineer", "IT", "web developer",
+        # 金融
+        "accountant", "financial analyst", "finance", "banking", "accounting",
+        # 市场
+        "marketing", "digital marketing", "SEO", "content marketing", "brand manager",
+        # 销售
+        "sales", "account manager", "business development", "sales manager", "account executive",
+        # 设计
+        "designer", "UX", "UI", "graphic designer", "product designer",
+        # 人力资源
+        "HR", "human resources", "recruiter", "talent acquisition", "HR manager",
+        # 运营
+        "operations", "project manager", "product manager", "customer service", "support",
+        # 其他
+        "consultant", "legal", "admin", "assistant"
+    ]
 
     for country in countries:
         for keyword in keywords:
             try:
-                jobs = await scraper.scrape_adzuna(country, keyword, limit=20)
+                jobs = await scraper.scrape_adzuna(country, keyword, limit=10)
                 all_jobs.extend(jobs)
                 print(f"  ✅ {country} - {keyword}: {len(jobs)} 个职位")
             except Exception as e:
                 print(f"  ❌ {country} - {keyword} 失败")
-
-    print(f"📊 共获取 {len(all_jobs)} 个职位")
 
     # 2. 如果没数据，使用扩展的示例数据
     if len(all_jobs) < 5:
