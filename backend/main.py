@@ -188,19 +188,7 @@ async def run_scraper():
 # ============== 启动事件 ==============
 @app.on_event("startup")
 async def startup():
-    print("🔄 启动中...")
-    try:
-        # 测试数据库连接
-        pool = await get_pool()
-        print("✅ 数据库连接成功")
-
-        # 初始化表
-        await init_db()
-
-        # 运行爬虫
-        await run_scraper()
-    except Exception as e:
-        print(f"❌ 启动错误: {e}")
+    print("✅ 应用启动完成")
 
 # ============== API 端点 ==============
 
