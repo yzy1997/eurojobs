@@ -77,10 +77,16 @@ class JobScraper:
         app_id = "2ef8c956"
         app_key = "00569c16b823ed37c3f4253495ae0fbf"
         country_code = {
+            # 西欧
             "德国": "de", "法国": "fr", "英国": "gb", "荷兰": "nl",
-            "西班牙": "es", "意大利": "it", "瑞典": "se", "芬兰": "fi",
-            "波兰": "pl", "丹麦": "dk", "挪威": "no", "瑞士": "ch",
-            "奥地利": "at", "比利时": "be", "爱尔兰": "ie"
+            "比利时": "be", "爱尔兰": "ie", "奥地利": "at", "瑞士": "ch", "卢森堡": "lu",
+            # 北欧
+            "瑞典": "se", "挪威": "no", "丹麦": "dk", "芬兰": "fi", "冰岛": "is",
+            # 南欧
+            "西班牙": "es", "意大利": "it", "葡萄牙": "pt", "希腊": "gr", "马耳他": "mt", "塞浦路斯": "cy",
+            # 东欧
+            "波兰": "pl", "捷克": "cz", "匈牙利": "hu", "罗马尼亚": "ro", "保加利亚": "bg",
+            "斯洛伐克": "sk", "斯洛文尼亚": "si", "克罗地亚": "hr", "爱沙尼亚": "ee", "拉脱维亚": "lv", "立陶宛": "lt"
         }.get(country, "de")
 
         url = f"https://api.adzuna.com/v1/api/jobs/{country_code}/search?app_id={app_id}&app_key={app_key}&what={keyword}&results_per_page={limit}"
@@ -118,20 +124,59 @@ class JobScraper:
 
     def categorize(self, title: str, description: str) -> str:
         text = (title + " " + description).lower()
-        if any(w in text for w in ["software", "developer", "engineer", "python", "java", "frontend", "backend", "data", "ai", "it"]):
+        # 技术/IT
+        if any(w in text for w in ["python", "java", "javascript", "software", "developer", "engineer",
+            "frontend", "backend", "full stack", "web", "mobile", "app", "cloud", "devops",
+            "ai", "machine learning", "data", "database", "sql", "linux", "cybersecurity",
+            "blockchain", "qa", "tester", "network", "system", "it support", "api"]):
             return "技术"
-        elif any(w in text for w in ["finance", "financial", "accounting", "accountant"]):
+        # 产品/设计
+        elif any(w in text for w in ["product manager", "project manager", "designer", "ui", "ux",
+            "graphic", "video", "animation", "game", "3d", "ux researcher", "product owner"]):
+            return "产品设计"
+        # 金融
+        elif any(w in text for w in ["finance", "financial", "accounting", "accountant", "banking",
+            "analyst", "auditor", "controller", "treasury", "risk", "investment", "tax", "actuary", "economist"]):
             return "金融"
-        elif any(w in text for w in ["marketing", "digital", "seo", "content", "brand"]):
+        # 市场
+        elif any(w in text for w in ["marketing", "digital", "seo", "sem", "social media", "content",
+            "brand", "pr", "communication", "growth", "advertising", "campaign"]):
             return "市场"
-        elif any(w in text for w in ["sales", "account", "business", "account manager"]):
+        # 销售
+        elif any(w in text for w in ["sales", "business development", "account manager", "account executive",
+            "sales manager", "representative", "consultant", "partner", "client"]):
             return "销售"
-        elif any(w in text for w in ["design", "designer", "ui", "ux", "creative"]):
-            return "设计"
-        elif any(w in text for w in ["hr", "human resources", "recruiter", "talent"]):
-            return "人力"
-        else:
+        # 人力资源
+        elif any(w in text for w in ["hr", "human resources", "recruiter", "recruitment", "talent",
+            "people operations", "benefits", "compensation", "training", "staffing"]):
+            return "人力资源"
+        # 运营
+        elif any(w in text for w in ["operations", "manager", "director", "executive", "supply chain",
+            "logistics", "procurement", "customer service", "support", "call center", "quality", "facilities"]):
             return "运营"
+        # 医疗
+        elif any(w in text for w in ["nurse", "doctor", "medical", "healthcare", "pharma", "biotech",
+            "clinical", "hospital", "patient"]):
+            return "医疗"
+        # 教育
+        elif any(w in text for w in ["teacher", "education", "trainer", "instructor", "professor",
+            "academic", "teaching", "course"]):
+            return "教育"
+        # 制造/工程
+        elif any(w in text for w in ["manufacturing", "production", "mechanical", "electrical",
+            "civil", "process", "safety", "quality engineer", "industrial"]):
+            return "制造工程"
+        # 行政
+        elif any(w in text for w in ["assistant", "secretary", "admin", "administrative", "receptionist"]):
+            return "行政"
+        # 法律
+        elif any(w in text for w in ["legal", "lawyer", "attorney", "compliance", "counsel", "contract"]):
+            return "法律"
+        # 房地产
+        elif any(w in text for w in ["real estate", "property", "construction", "architect"]):
+            return "房地产"
+        else:
+            return "其他"
 
 # ============== 运行爬虫 ==============
 async def run_scraper():
@@ -142,36 +187,65 @@ async def run_scraper():
 
     # 1. Adzuna API (需要真实API key)
     print("📡 尝试 Adzuna API...")
-    countries = ["德国", "法国", "英国", "荷兰", "西班牙", "意大利", "瑞典", "芬兰", "波兰", "丹麦", "挪威", "瑞士", "奥地利", "比利时", "爱尔兰"]
-    keywords = [
-        # 技术
-        "python", "software developer", "data scientist", "frontend developer",
-        "backend developer", "devops", "full stack", "machine learning", "cloud",
-        "data engineer", "software engineer", "IT", "web developer",
-        # 金融
-        "accountant", "financial analyst", "finance", "banking", "accounting",
-        # 市场
-        "marketing", "digital marketing", "SEO", "content marketing", "brand manager",
-        # 销售
-        "sales", "account manager", "business development", "sales manager", "account executive",
-        # 设计
-        "designer", "UX", "UI", "graphic designer", "product designer",
-        # 人力资源
-        "HR", "human resources", "recruiter", "talent acquisition", "HR manager",
-        # 运营
-        "operations", "project manager", "product manager", "customer service", "support",
-        # 其他
-        "consultant", "legal", "admin", "assistant"
+    # 全部欧洲国家
+    countries = [
+        # 西欧
+        "德国", "法国", "英国", "荷兰", "比利时", "爱尔兰", "奥地利", "瑞士", "卢森堡",
+        # 北欧
+        "瑞典", "挪威", "丹麦", "芬兰", "冰岛",
+        # 南欧
+        "西班牙", "意大利", "葡萄牙", "希腊", "马耳他", "塞浦路斯",
+        # 东欧
+        "波兰", "捷克", "匈牙利", "罗马尼亚", "保加利亚", "斯洛伐克", "斯洛文尼亚", "克罗地亚", "爱沙尼亚", "拉脱维亚", "立陶宛"
     ]
+
+    # 所有类别关键词 - 尽可能全面
+    keywords = [
+        # IT/技术
+        "python", "javascript", "java", "software", "developer", "engineer", "data scientist",
+        "frontend", "backend", "full stack", "web", "mobile", "app", "cloud", "devops", "AI",
+        "machine learning", "deep learning", "cybersecurity", "blockchain", "QA", "tester",
+        "IT support", "system administrator", "network", "database", "SQL", "Linux",
+        # 产品/设计
+        "product manager", "project manager", "designer", "UX", "UI", "graphic", "video",
+        "game", "3D", "animation", "UX researcher", "product owner",
+        # 金融/会计
+        "accountant", "accounting", "finance", "financial", "banking", "analyst", "auditor",
+        "controller", "treasury", "risk", "investment", "tax", "actuary",
+        # 市场/销售
+        "marketing", "sales", "digital", "SEO", "SEM", "social media", "content",
+        "brand", "PR", "communication", "growth", "business development", "account manager",
+        "account executive", "sales manager", "representative", "consultant",
+        # 人力资源
+        "HR", "human resources", "recruiter", "talent", "recruitment", "training",
+        "people operations", "HR manager", "benefits", "compensation",
+        # 运营
+        "operations", "manager", "director", "executive", "supply chain", "logistics",
+        "procurement", "customer service", "support", "call center", "quality",
+        # 医疗/教育
+        "nurse", "doctor", "medical", "healthcare", "pharma", "biotech",
+        "teacher", "education", "trainer", "instructor", "professor",
+        # 制造/工程
+        "engineer", "manufacturing", "production", "mechanical", "electrical",
+        "civil", "process", "quality engineer", "safety",
+        # 其他
+        "assistant", "secretary", "admin", "legal", "compliance", "logistics",
+        "purchasing", "real estate", "logistics", "facilities"
+    ]
+
+    print(f"🔍 开始爬取 {len(countries)} 个国家，{len(keywords)} 个关键词...")
 
     for country in countries:
         for keyword in keywords:
             try:
                 jobs = await scraper.scrape_adzuna(country, keyword, limit=10)
-                all_jobs.extend(jobs)
-                print(f"  ✅ {country} - {keyword}: {len(jobs)} 个职位")
+                if jobs:
+                    all_jobs.extend(jobs)
+                    print(f"  ✅ {country} - {keyword}: {len(jobs)} 个")
             except Exception as e:
-                print(f"  ❌ {country} - {keyword} 失败")
+                pass
+
+    print(f"📊 初步获取 {len(all_jobs)} 个职位")
 
     # 2. 如果没数据，使用扩展的示例数据
     if len(all_jobs) < 5:
