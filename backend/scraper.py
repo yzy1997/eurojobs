@@ -144,14 +144,19 @@ async def run_scraper():
     # 保存到数据库
     pool = await asyncpg.create_pool(DATABASE_URL, min_size=2, max_size=10)
     async with pool.acquire() as conn:
-        # 删除旧数据
-        await conn.execute("DELETE FROM jobs")
-        # 插入新数据
+        # 插入或更新数据（保留现有数据）
         for job in unique_jobs:
             try:
                 await conn.execute(
                     """INSERT INTO jobs (title, company, location, country, category, salary_range, description, url, source, likes)
-                       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)""",
+                       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                       ON CONFLICT (url) DO UPDATE SET
+                       title = EXCLUDED.title,
+                       company = EXCLUDED.company,
+                       location = EXCLUDED.location,
+                       description = EXCLUDED.description,
+                       salary_range = EXCLUDED.salary_range,
+                       created_at = CURRENT_TIMESTAMP""",
                     job["title"], job["company"], job["location"], job["country"],
                     job["category"], job["salary_range"], job["description"],
                     job["url"], job["source"], job.get("likes", 0)

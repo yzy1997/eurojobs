@@ -57,7 +57,7 @@ async def init_db():
                 category VARCHAR(50),
                 salary_range VARCHAR(100),
                 description TEXT,
-                url TEXT NOT NULL,
+                url TEXT NOT NULL UNIQUE,
                 source VARCHAR(50) NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 likes INTEGER DEFAULT 0
@@ -137,7 +137,7 @@ async def startup():
     print("✅ EuroJobs API 启动")
     await init_db()
     start_scheduler()
-    asyncio.create_task(run_scraper())
+    # 不再自动爬取，启动时只初始化数据库
 
 # ============== 数据模型 ==============
 class JobCreate(BaseModel):
