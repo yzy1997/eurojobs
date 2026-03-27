@@ -87,7 +87,7 @@ async def scrape_single(session, country: str, keyword: str, limit: int = 5):
                         "country": country,
                         "category": categorize_job(item.get("title", "")),
                         "salary_range": format_salary(item.get("salary_min"), item.get("salary_max")),
-                        "description": item.get("description", "")[:500] if item.get("description") else "",
+                        "description": item.get("description", "") if item.get("description") else "",
                         "url": item.get("redirect_url", ""),
                         "source": "Adzuna",
                     })
