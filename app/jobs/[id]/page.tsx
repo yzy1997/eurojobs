@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useParams } from "next/navigation";
-import { MapPin, Briefcase, Heart, Calendar, ArrowLeft, Send } from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
+import { MapPin, Briefcase, Heart, Calendar, ArrowLeft, Send, Lock } from "lucide-react";
 
 interface Job {
   id: number;
@@ -31,14 +32,21 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://eurojobs-production.
 
 export default function JobDetail() {
   const params = useParams();
+  const router = useRouter();
   const [job, setJob] = useState<Job | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
   const [newComment, setNewComment] = useState("");
-  const [authorName, setAuthorName] = useState("");
   const [liked, setLiked] = useState(false);
+  const [user, setUser] = useState<{ username: string } | null>(null);
 
   useEffect(() => {
+    // 检查登录状态
+    const userStr = localStorage.getItem("user");
+    if (userStr) {
+      setUser(JSON.parse(userStr));
+    }
+
     fetchJobDetails();
     fetchComments();
   }, [params.id]);
@@ -71,8 +79,16 @@ export default function JobDetail() {
 
   const handleLike = async () => {
     if (!job) return;
+    if (!user) {
+      router.push("/login");
+      return;
+    }
     try {
-      await fetch(`${API_URL}/api/jobs/${job.id}/like`, { method: "POST" });
+      const token = localStorage.getItem("token");
+      await fetch(`${API_URL}/api/jobs/${job.id}/like`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}` }
+      });
       setJob({ ...job, likes: job.likes + 1 });
       setLiked(true);
     } catch (error) {
@@ -82,16 +98,20 @@ export default function JobDetail() {
 
   const handleComment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newComment.trim() || !authorName.trim()) return;
+    if (!newComment.trim() || !user) return;
 
     try {
+      const token = localStorage.getItem("token");
       const res = await fetch(`${API_URL}/api/comments`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
         body: JSON.stringify({
           job_id: Number(params.id),
           content: newComment,
-          author: authorName,
+          author: user.username,
         }),
       });
 
@@ -104,6 +124,42 @@ export default function JobDetail() {
       console.error("Failed to post comment:", error);
     }
   };
+
+  // 未登录状态 - 显示提示
+  if (!loading && !user) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="max-w-md w-full mx-4">
+          <div className="bg-white rounded-lg shadow-md p-8 text-center">
+            <div className="w-16 h-16 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Lock className="w-8 h-8 text-primary-600" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">登录后可查看</h2>
+            <p className="text-gray-500 mb-6">
+              此职位的详细信息和评论功能需要登录后使用
+            </p>
+            <div className="space-y-3">
+              <Link
+                href="/login"
+                className="block w-full bg-primary-600 text-white py-3 rounded-lg hover:bg-primary-700 transition"
+              >
+                登录
+              </Link>
+              <Link
+                href="/register"
+                className="block w-full bg-gray-100 text-gray-700 py-3 rounded-lg hover:bg-gray-200 transition"
+              >
+                注册账号
+              </Link>
+            </div>
+            <a href="/" className="block mt-4 text-gray-500 hover:text-primary-600">
+              ← 返回首页
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -183,15 +239,9 @@ export default function JobDetail() {
             <div className="bg-white rounded-lg shadow-sm p-6">
               <h2 className="text-xl font-semibold mb-4">评论 ({comments.length})</h2>
 
-              {/* Comment Form */}
+              {/* Comment Form - 只对登录用户显示 */}
               <form onSubmit={handleComment} className="mb-6 p-4 bg-gray-50 rounded-lg">
-                <input
-                  type="text"
-                  placeholder="你的名字"
-                  className="w-full px-3 py-2 border rounded mb-3"
-                  value={authorName}
-                  onChange={(e) => setAuthorName(e.target.value)}
-                />
+                <p className="text-sm text-gray-500 mb-3">以 {user?.username} 身份评论</p>
                 <textarea
                   placeholder="写下你的评论..."
                   className="w-full px-3 py-2 border rounded mb-3"
@@ -201,7 +251,8 @@ export default function JobDetail() {
                 />
                 <button
                   type="submit"
-                  className="flex items-center gap-2 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700"
+                  disabled={!newComment.trim()}
+                  className="flex items-center gap-2 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 disabled:opacity-50"
                 >
                   <Send size={16} /> 发表评论
                 </button>
