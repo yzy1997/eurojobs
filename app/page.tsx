@@ -65,11 +65,33 @@ export default function Home() {
   const paginatedJobs = filteredJobs.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
   const handleLike = async (jobId: number) => {
+    const userStr = localStorage.getItem("user");
+    if (!userStr) {
+      window.location.href = "/login";
+      return;
+    }
+
+    // 检查是否已点赞
+    if (likedJobs.has(jobId)) {
+      return;
+    }
+
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://eurojobs-production.up.railway.app';
-      await fetch(`${apiUrl}/api/jobs/${jobId}/like`, { method: "POST" });
-      setJobs(jobs.map(j => j.id === jobId ? { ...j, likes: j.likes + 1 } : j));
-      setLikedJobs(new Set(likedJobs.add(jobId)));
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${apiUrl}/api/jobs/${jobId}/like`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setJobs(jobs.map(j => j.id === jobId ? { ...j, likes: data.likes } : j));
+        setLikedJobs(new Set(likedJobs.add(jobId)));
+      } else {
+        const data = await res.json();
+        alert(data.detail || "点赞失败");
+      }
     } catch (error) {
       console.error("Failed to like job:", error);
     }
@@ -176,9 +198,10 @@ export default function Home() {
                       <div className="flex flex-col gap-2 ml-4">
                         <button
                           onClick={() => handleLike(job.id)}
+                          disabled={likedJobs.has(job.id)}
                           className={`flex items-center gap-1 px-3 py-1 rounded text-sm ${
                             likedJobs.has(job.id)
-                              ? "bg-red-50 text-red-500"
+                              ? "bg-red-50 text-red-500 cursor-not-allowed"
                               : "bg-gray-50 text-gray-500 hover:bg-gray-100"
                           }`}
                         >
