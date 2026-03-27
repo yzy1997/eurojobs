@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, MapPin, Briefcase, Heart, MessageCircle, Filter, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, MapPin, Briefcase, Heart, MessageCircle, Filter, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Send } from "lucide-react";
 
 interface Job {
   id: number;
@@ -31,6 +31,7 @@ export default function Home() {
   const [selectedCategory, setSelectedCategory] = useState("全部");
   const [likedJobs, setLikedJobs] = useState<Set<number>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
+  const [expandedJob, setExpandedJob] = useState<number | null>(null);
 
   useEffect(() => {
     fetchAllJobs();
@@ -40,7 +41,6 @@ export default function Home() {
     setLoading(true);
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://eurojobs-production.up.railway.app';
-      // 获取所有数据，不限制数量
       const res = await fetch(`${apiUrl}/api/jobs`);
       const data = await res.json();
       setJobs(Array.isArray(data) ? data : []);
@@ -59,7 +59,6 @@ export default function Home() {
     return matchSearch && matchCountry && matchCategory;
   });
 
-  // 分页
   const totalPages = Math.ceil(filteredJobs.length / ITEMS_PER_PAGE);
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
   const paginatedJobs = filteredJobs.slice(startIndex, startIndex + ITEMS_PER_PAGE);
@@ -71,7 +70,6 @@ export default function Home() {
       return;
     }
 
-    // 检查是否已点赞
     if (likedJobs.has(jobId)) {
       return;
     }
@@ -88,13 +86,14 @@ export default function Home() {
         const data = await res.json();
         setJobs(jobs.map(j => j.id === jobId ? { ...j, likes: data.likes } : j));
         setLikedJobs(new Set(likedJobs.add(jobId)));
-      } else {
-        const data = await res.json();
-        alert(data.detail || "点赞失败");
       }
     } catch (error) {
       console.error("Failed to like job:", error);
     }
+  };
+
+  const toggleExpand = (jobId: number) => {
+    setExpandedJob(expandedJob === jobId ? null : jobId);
   };
 
   return (
@@ -177,10 +176,12 @@ export default function Home() {
                   <div key={job.id} className="bg-white p-5 rounded-lg shadow-sm border hover:shadow-md transition">
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                          <a href={`/jobs/${job.id}`} className="hover:text-primary-600">
-                            {job.title}
-                          </a>
+                        <h3
+                          className="text-lg font-semibold text-gray-900 mb-1 cursor-pointer hover:text-primary-600 flex items-center gap-2"
+                          onClick={() => toggleExpand(job.id)}
+                        >
+                          {job.title}
+                          {expandedJob === job.id ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                         </h3>
                         <p className="text-gray-600 mb-2">{job.company}</p>
                         <div className="flex flex-wrap gap-3 text-sm text-gray-500">
@@ -208,24 +209,33 @@ export default function Home() {
                           <Heart size={14} fill={likedJobs.has(job.id) ? "currentColor" : "none"} />
                           {job.likes}
                         </button>
-                        <a
-                          href={`/jobs/${job.id}`}
-                          className="flex items-center gap-1 px-3 py-1 rounded bg-gray-50 text-gray-500 hover:bg-gray-100 text-sm"
-                        >
-                          <MessageCircle size={14} /> 评论
-                        </a>
                       </div>
                     </div>
+
+                    {/* Expanded Details */}
+                    {expandedJob === job.id && (
+                      <div className="mt-4 pt-4 border-t">
+                        <div className="bg-gray-50 p-4 rounded-lg">
+                          <h4 className="font-semibold mb-2">职位描述</h4>
+                          <p className="text-gray-700 whitespace-pre-line text-sm mb-4">
+                            {job.description || "暂无详细描述"}
+                          </p>
+                          <div className="flex items-center gap-4 text-sm text-gray-500 mb-4">
+                            <span>来源: {job.source}</span>
+                            <span>发布日期: {new Date(job.created_at).toLocaleDateString('zh-CN')}</span>
+                          </div>
+                          <a
+                            href={`/apply?jobId=${job.id}&title=${encodeURIComponent(job.title)}&company=${encodeURIComponent(job.company)}`}
+                            className="inline-flex items-center gap-2 bg-primary-600 text-white px-6 py-2 rounded-lg hover:bg-primary-700"
+                          >
+                            <Send size={16} /> 申请职位
+                          </a>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="mt-3 flex items-center justify-between">
                       <span className="text-xs text-gray-400">来源: {job.source}</span>
-                      <a
-                        href={job.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-primary-600 hover:underline text-sm"
-                      >
-                        查看原站 →
-                      </a>
                     </div>
                   </div>
                 ))}
@@ -255,15 +265,6 @@ export default function Home() {
               )}
             </>
           )}
-        </div>
-      </section>
-
-      {/* Ad Space */}
-      <section className="py-8 bg-gray-50">
-        <div className="container">
-          <div className="bg-white rounded-lg p-8 text-center border-2 border-dashed border-gray-300">
-            <p className="text-gray-400">广告位招商中...</p>
-          </div>
         </div>
       </section>
     </div>

@@ -76,6 +76,26 @@ async def init_db():
                 UNIQUE(job_id, user_id)
             )
         """)
+        # 申请记录表
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS applications (
+                id SERIAL PRIMARY KEY,
+                job_id INTEGER REFERENCES jobs(id) ON DELETE SET NULL,
+                job_title VARCHAR(255),
+                company VARCHAR(255),
+                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                name VARCHAR(100) NOT NULL,
+                email VARCHAR(100) NOT NULL,
+                phone VARCHAR(50),
+                location VARCHAR(100),
+                education TEXT,
+                experience TEXT,
+                skills TEXT,
+                cover_letter TEXT,
+                status VARCHAR(20) DEFAULT 'pending',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
     # 初始化 users 表
     await init_users_table()
     print("✅ 数据库表初始化完成")
@@ -245,6 +265,43 @@ async def create_comment(comment: CommentCreate):
             comment.job_id, comment.content, comment.author
         )
         return dict(row)
+
+# ============== 职位申请 ==============
+class ApplicationCreate(BaseModel):
+    job_id: int
+    job_title: str
+    company: str
+    name: str
+    email: str
+    phone: Optional[str] = None
+    location: Optional[str] = None
+    education: Optional[str] = None
+    experience: Optional[str] = None
+    skills: Optional[str] = None
+    cover_letter: Optional[str] = None
+
+@app.post("/api/applications")
+async def create_application(app_data: ApplicationCreate, current_user: dict = Depends(get_current_user)):
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """INSERT INTO applications (job_id, job_title, company, user_id, name, email, phone, location, education, experience, skills, cover_letter)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *""",
+            app_data.job_id, app_data.job_title, app_data.company, current_user["user_id"],
+            app_data.name, app_data.email, app_data.phone, app_data.location,
+            app_data.education, app_data.experience, app_data.skills, app_data.cover_letter
+        )
+        return dict(row)
+
+@app.get("/api/applications")
+async def get_applications(current_user: dict = Depends(get_current_user)):
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM applications WHERE user_id = $1 ORDER BY created_at DESC",
+            current_user["user_id"]
+        )
+        return [dict(row) for row in rows]
 
 # ============== 注册认证路由 ==============
 app.include_router(auth_router)
