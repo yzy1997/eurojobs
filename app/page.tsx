@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, MapPin, Briefcase, Heart, MessageCircle, Filter, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Send } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Search, MapPin, Briefcase, Heart, Filter, ChevronLeft, ChevronRight, ArrowRight } from "lucide-react";
 
 interface Job {
   id: number;
@@ -24,6 +25,7 @@ const CATEGORIES = ["全部", "技术", "产品设计", "金融", "市场", "销
 const ITEMS_PER_PAGE = 20;
 
 export default function Home() {
+  const router = useRouter();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -31,7 +33,6 @@ export default function Home() {
   const [selectedCategory, setSelectedCategory] = useState("全部");
   const [likedJobs, setLikedJobs] = useState<Set<number>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
-  const [expandedJob, setExpandedJob] = useState<number | null>(null);
 
   useEffect(() => {
     fetchAllJobs();
@@ -66,7 +67,7 @@ export default function Home() {
   const handleLike = async (jobId: number) => {
     const userStr = localStorage.getItem("user");
     if (!userStr) {
-      window.location.href = "/login";
+      router.push("/login");
       return;
     }
 
@@ -92,8 +93,22 @@ export default function Home() {
     }
   };
 
-  const toggleExpand = (jobId: number) => {
-    setExpandedJob(expandedJob === jobId ? null : jobId);
+  const handleViewDetail = (jobId: number) => {
+    const userStr = localStorage.getItem("user");
+    if (!userStr) {
+      router.push("/login");
+      return;
+    }
+    router.push(`/jobs/${jobId}`);
+  };
+
+  const handleApply = (job: Job) => {
+    const userStr = localStorage.getItem("user");
+    if (!userStr) {
+      router.push("/login");
+      return;
+    }
+    router.push(`/apply?jobId=${job.id}&title=${encodeURIComponent(job.title)}&company=${encodeURIComponent(job.company)}`);
   };
 
   return (
@@ -177,11 +192,10 @@ export default function Home() {
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
                         <h3
-                          className="text-lg font-semibold text-gray-900 mb-1 cursor-pointer hover:text-primary-600 flex items-center gap-2"
-                          onClick={() => toggleExpand(job.id)}
+                          className="text-lg font-semibold text-gray-900 mb-1 cursor-pointer hover:text-primary-600"
+                          onClick={() => handleViewDetail(job.id)}
                         >
                           {job.title}
-                          {expandedJob === job.id ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                         </h3>
                         <p className="text-gray-600 mb-2">{job.company}</p>
                         <div className="flex flex-wrap gap-3 text-sm text-gray-500">
@@ -212,30 +226,14 @@ export default function Home() {
                       </div>
                     </div>
 
-                    {/* Expanded Details */}
-                    {expandedJob === job.id && (
-                      <div className="mt-4 pt-4 border-t">
-                        <div className="bg-gray-50 p-4 rounded-lg">
-                          <h4 className="font-semibold mb-2">职位描述</h4>
-                          <p className="text-gray-700 whitespace-pre-line text-sm mb-4">
-                            {job.description || "暂无详细描述"}
-                          </p>
-                          <div className="flex items-center gap-4 text-sm text-gray-500 mb-4">
-                            <span>来源: {job.source}</span>
-                            <span>发布日期: {new Date(job.created_at).toLocaleDateString('zh-CN')}</span>
-                          </div>
-                          <a
-                            href={`/apply?jobId=${job.id}&title=${encodeURIComponent(job.title)}&company=${encodeURIComponent(job.company)}`}
-                            className="inline-flex items-center gap-2 bg-primary-600 text-white px-6 py-2 rounded-lg hover:bg-primary-700"
-                          >
-                            <Send size={16} /> 申请职位
-                          </a>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="mt-3 flex items-center justify-between">
+                    <div className="mt-4 flex items-center justify-between">
                       <span className="text-xs text-gray-400">来源: {job.source}</span>
+                      <button
+                        onClick={() => handleApply(job)}
+                        className="flex items-center gap-1 text-primary-600 hover:text-primary-700 text-sm font-medium"
+                      >
+                        申请职位 <ArrowRight size={14} />
+                      </button>
                     </div>
                   </div>
                 ))}

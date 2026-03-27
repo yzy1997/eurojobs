@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { MapPin, Briefcase, Heart, Calendar, ArrowLeft, Send, Lock } from "lucide-react";
+import { MapPin, Briefcase, Heart, Calendar, ArrowLeft, Send, Lock, MessageCircle } from "lucide-react";
 
 interface Job {
   id: number;
@@ -41,22 +41,16 @@ export default function JobDetail() {
   const [user, setUser] = useState<{ username: string } | null>(null);
 
   useEffect(() => {
-    // 检查登录状态
     const userStr = localStorage.getItem("user");
     if (userStr) {
       setUser(JSON.parse(userStr));
     }
+  }, []);
 
+  useEffect(() => {
     fetchJobDetails();
     fetchComments();
   }, [params.id]);
-
-  // 获取点赞状态
-  useEffect(() => {
-    if (user) {
-      fetchLikeStatus();
-    }
-  }, [user, params.id]);
 
   const fetchJobDetails = async () => {
     try {
@@ -69,6 +63,18 @@ export default function JobDetail() {
       console.error("Failed to fetch job:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchComments = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/comments?job_id=${params.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setComments(data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch comments:", error);
     }
   };
 
@@ -91,17 +97,11 @@ export default function JobDetail() {
     }
   };
 
-  const fetchComments = async () => {
-    try {
-      const res = await fetch(`${API_URL}/api/comments?job_id=${params.id}`);
-      if (res.ok) {
-        const data = await res.json();
-        setComments(data);
-      }
-    } catch (error) {
-      console.error("Failed to fetch comments:", error);
+  useEffect(() => {
+    if (user) {
+      fetchLikeStatus();
     }
-  };
+  }, [user, job]);
 
   const handleLike = async () => {
     if (!job) return;
@@ -131,7 +131,10 @@ export default function JobDetail() {
 
   const handleComment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newComment.trim() || !user) return;
+    if (!newComment.trim() || !user) {
+      router.push("/login");
+      return;
+    }
 
     try {
       const token = localStorage.getItem("token");
@@ -173,21 +176,18 @@ export default function JobDetail() {
             </p>
             <div className="space-y-3">
               <Link
-                href="/login"
+                href="/"
                 className="block w-full bg-primary-600 text-white py-3 rounded-lg hover:bg-primary-700 transition"
+              >
+                返回首页
+              </Link>
+              <Link
+                href="/login"
+                className="block w-full bg-gray-100 text-gray-700 py-3 rounded-lg hover:bg-gray-200 transition"
               >
                 登录
               </Link>
-              <Link
-                href="/register"
-                className="block w-full bg-gray-100 text-gray-700 py-3 rounded-lg hover:bg-gray-200 transition"
-              >
-                注册账号
-              </Link>
             </div>
-            <a href="/" className="block mt-4 text-gray-500 hover:text-primary-600">
-              ← 返回首页
-            </a>
           </div>
         </div>
       </div>
@@ -248,23 +248,22 @@ export default function JobDetail() {
               <div className="mt-6 flex items-center gap-4">
                 <button
                   onClick={handleLike}
+                  disabled={liked}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg ${
                     liked
-                      ? "bg-red-50 text-red-500"
+                      ? "bg-red-50 text-red-500 cursor-not-allowed"
                       : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                   }`}
                 >
                   <Heart size={20} fill={liked ? "currentColor" : "none"} />
                   {liked ? "已点赞" : "点赞"} ({job.likes})
                 </button>
-                <a
-                  href={job.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <Link
+                  href={`/apply?jobId=${job.id}&title=${encodeURIComponent(job.title)}&company=${encodeURIComponent(job.company)}`}
                   className="flex-1 text-center bg-primary-600 text-white py-2 rounded-lg hover:bg-primary-700 transition"
                 >
                   申请职位 →
-                </a>
+                </Link>
               </div>
             </div>
 
@@ -272,7 +271,7 @@ export default function JobDetail() {
             <div className="bg-white rounded-lg shadow-sm p-6">
               <h2 className="text-xl font-semibold mb-4">评论 ({comments.length})</h2>
 
-              {/* Comment Form - 只对登录用户显示 */}
+              {/* Comment Form */}
               <form onSubmit={handleComment} className="mb-6 p-4 bg-gray-50 rounded-lg">
                 <p className="text-sm text-gray-500 mb-3">以 {user?.username} 身份评论</p>
                 <textarea
@@ -287,7 +286,7 @@ export default function JobDetail() {
                   disabled={!newComment.trim()}
                   className="flex items-center gap-2 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 disabled:opacity-50"
                 >
-                  <Send size={16} /> 发表评论
+                  <MessageCircle size={16} /> 发表评论
                 </button>
               </form>
 
@@ -332,6 +331,16 @@ export default function JobDetail() {
                   <dd className="font-medium">{job.likes}</dd>
                 </div>
               </dl>
+            </div>
+
+            {/* Apply Button in Sidebar */}
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <Link
+                href={`/apply?jobId=${job.id}&title=${encodeURIComponent(job.title)}&company=${encodeURIComponent(job.company)}`}
+                className="flex items-center justify-center gap-2 w-full bg-primary-600 text-white py-3 rounded-lg hover:bg-primary-700 transition"
+              >
+                <Send size={18} /> 申请职位
+              </Link>
             </div>
 
             {/* Ad Space */}
