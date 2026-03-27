@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import Header from "@/components/Header";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -17,17 +18,7 @@ export default function RootLayout({
   return (
     <html lang="zh-CN">
       <body className={inter.className}>
-        <header className="bg-white shadow-sm border-b">
-          <div className="container py-4">
-            <div className="flex items-center justify-between">
-              <h1 className="text-2xl font-bold text-primary-600">EuroJobs</h1>
-              <nav className="flex gap-6">
-                <a href="/" className="text-gray-600 hover:text-primary-600">首页</a>
-                <a href="/jobs" className="text-gray-600 hover:text-primary-600">职位</a>
-              </nav>
-            </div>
-          </div>
-        </header>
+        <Header />
         <main>{children}</main>
         <footer className="bg-gray-900 text-white py-8 mt-16">
           <div className="container text-center">
