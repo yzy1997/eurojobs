@@ -16,6 +16,12 @@ from auth import router as auth_router, init_users_table, get_current_user
 # 导入爬虫模块
 from scraper import run_scraper
 
+# 导入芬兰爬虫
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from finland_jobs_scraper import KuntarekryAdapter, HttpClient as FinlandClient
+
 app = FastAPI(title="EuroJobs API")
 
 app.add_middleware(
@@ -160,6 +166,50 @@ async def root():
 async def trigger_scrape():
     await run_scraper()
     return {"message": "爬取完成"}
+
+@app.get("/api/scrape/finland")
+async def scrape_finland():
+    """爬取芬兰职位 (Kuntarekry)"""
+    print("🚀 开始爬取芬兰职位...")
+
+    try:
+        # 使用芬兰爬虫
+        client = FinlandClient(timeout=30)
+        adapter = KuntarekryAdapter(client=client)
+        finnish_jobs = adapter.fetch()
+
+        print(f"📊 获取到 {len(finnish_jobs)} 个芬兰职位")
+
+        if not finnish_jobs:
+            return {"message": "未获取到芬兰职位数据", "count": 0}
+
+        # 保存到数据库
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            # 先删除旧的芬兰职位
+            await conn.execute("DELETE FROM jobs WHERE country = '芬兰'")
+
+            # 插入新数据
+            saved_count = 0
+            for job in finnish_jobs:
+                try:
+                    await conn.execute(
+                        """INSERT INTO jobs (title, company, location, country, category, salary_range, description, url, source, likes)
+                           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)""",
+                        job.title, job.company, job.location, "芬兰",
+                        "其他", "", job.description_snippet[:2000],
+                        job.url, f"芬兰-{job.source}", 0
+                    )
+                    saved_count += 1
+                except Exception as e:
+                    print(f"保存错误: {e}")
+
+        print(f"✅ 芬兰职位保存完成: {saved_count} 个")
+        return {"message": "芬兰职位爬取完成", "count": saved_count}
+
+    except Exception as e:
+        print(f"❌ 芬兰爬虫失败: {e}")
+        return {"message": f"爬取失败: {str(e)}", "count": 0}
 
 @app.get("/api/jobs")
 async def get_jobs(country: Optional[str] = None, category: Optional[str] = None, search: Optional[str] = None, limit: int = 10000, offset: int = 0):
