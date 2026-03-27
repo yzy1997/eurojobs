@@ -1,5 +1,5 @@
 """EuroJobs API - 主入口文件"""
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
@@ -11,7 +11,7 @@ import time
 from datetime import datetime
 
 # 导入认证模块
-from auth import router as auth_router, init_users_table
+from auth import router as auth_router, init_users_table, get_current_user
 
 # 导入爬虫模块
 from scraper import run_scraper
@@ -64,6 +64,16 @@ async def init_db():
                 content TEXT NOT NULL,
                 author VARCHAR(100) NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        # 点赞记录表 - 每个用户对每个职位只能点赞一次
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS job_likes (
+                id SERIAL PRIMARY KEY,
+                job_id INTEGER REFERENCES jobs(id) ON DELETE CASCADE,
+                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(job_id, user_id)
             )
         """)
     # 初始化 users 表
@@ -174,13 +184,47 @@ async def get_job(job_id: int):
         return dict(row)
 
 @app.post("/api/jobs/{job_id}/like")
-async def like_job(job_id: int):
+async def like_job(job_id: int, current_user: dict = Depends(get_current_user)):
     pool = await get_pool()
     async with pool.acquire() as conn:
-        row = await conn.fetchrow("UPDATE jobs SET likes = likes + 1 WHERE id = $1 RETURNING likes", job_id)
-        if not row:
+        # 检查职位是否存在
+        job = await conn.fetchrow("SELECT id FROM jobs WHERE id = $1", job_id)
+        if not job:
             raise HTTPException(status_code=404, detail="Job not found")
-        return {"likes": row["likes"]}
+
+        # 检查用户是否已经点赞
+        existing_like = await conn.fetchrow(
+            "SELECT id FROM job_likes WHERE job_id = $1 AND user_id = $2",
+            job_id, current_user["user_id"]
+        )
+        if existing_like:
+            raise HTTPException(status_code=400, detail="已经点赞过此职位")
+
+        # 插入点赞记录
+        await conn.execute(
+            "INSERT INTO job_likes (job_id, user_id) VALUES ($1, $2)",
+            job_id, current_user["user_id"]
+        )
+
+        # 更新点赞数
+        row = await conn.fetchrow("UPDATE jobs SET likes = likes + 1 WHERE id = $1 RETURNING likes", job_id)
+        return {"likes": row["likes"], "liked": True}
+
+@app.get("/api/jobs/{job_id}/like/status")
+async def get_like_status(job_id: int, current_user: dict = Depends(get_current_user)):
+    """获取当前用户是否已点赞"""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        existing_like = await conn.fetchrow(
+            "SELECT id FROM job_likes WHERE job_id = $1 AND user_id = $2",
+            job_id, current_user["user_id"]
+        )
+        # 获取总点赞数
+        job = await conn.fetchrow("SELECT likes FROM jobs WHERE id = $1", job_id)
+        return {
+            "liked": existing_like is not None,
+            "likes": job["likes"] if job else 0
+        }
 
 @app.get("/api/comments")
 async def get_comments(job_id: Optional[int] = None):

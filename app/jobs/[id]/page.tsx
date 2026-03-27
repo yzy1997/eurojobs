@@ -51,6 +51,13 @@ export default function JobDetail() {
     fetchComments();
   }, [params.id]);
 
+  // 获取点赞状态
+  useEffect(() => {
+    if (user) {
+      fetchLikeStatus();
+    }
+  }, [user, params.id]);
+
   const fetchJobDetails = async () => {
     try {
       const res = await fetch(`${API_URL}/api/jobs/${params.id}`);
@@ -62,6 +69,25 @@ export default function JobDetail() {
       console.error("Failed to fetch job:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchLikeStatus = async () => {
+    if (!user) return;
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_URL}/api/jobs/${params.id}/like/status`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setLiked(data.liked);
+        if (job) {
+          setJob({ ...job, likes: data.likes });
+        }
+      }
+    } catch (error) {
+      console.error("Failed to fetch like status:", error);
     }
   };
 
@@ -85,12 +111,19 @@ export default function JobDetail() {
     }
     try {
       const token = localStorage.getItem("token");
-      await fetch(`${API_URL}/api/jobs/${job.id}/like`, {
+      const res = await fetch(`${API_URL}/api/jobs/${job.id}/like`, {
         method: "POST",
         headers: { "Authorization": `Bearer ${token}` }
       });
-      setJob({ ...job, likes: job.likes + 1 });
-      setLiked(true);
+
+      if (res.ok) {
+        const data = await res.json();
+        setJob({ ...job, likes: data.likes });
+        setLiked(true);
+      } else {
+        const data = await res.json();
+        alert(data.detail || "点赞失败");
+      }
     } catch (error) {
       console.error("Failed to like job:", error);
     }
